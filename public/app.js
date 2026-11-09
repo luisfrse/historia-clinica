@@ -184,15 +184,7 @@
   }
 
   /* ---------- profesorado: lista y ficha de paciente ---------- */
-  async function viewPatients() {
-    const { patients } = await api('GET', '/api/patients');
-    const rows = patients.map((p) => { const d = p.data, age = ageOf(d.fecha_nacimiento); return h('tr', { class: 'clk', onclick: () => { location.hash = '#/patient/' + p.id; } },
-      h('td', null, h('a', { href: '#/patient/' + p.id, onclick: (e) => e.stopPropagation() }, name(d))), h('td', null, d.nhc || p.code), h('td', null, (age !== '' ? age + ' ' + t('age_years') : '') + (d.sexo ? ' / ' + t('sex_' + d.sexo) : '')),
-      h('td', null, [d.unidad, d.habitacion && 'H ' + d.habitacion, d.cama && 'C ' + d.cama].filter(Boolean).join(' / ')), h('td', null, d.diagnostico_medico || ''),
-      h('td', { class: 'r' }, p.charts), h('td', { class: 'r' }, p.records), h('td', null, p.archived ? h('span', { class: 'chip amb' }, t('archived')) : h('span', { class: 'chip grn' }, t('status_open')))); });
-    show(h('div', { class: 'pg-title' }, h('h1', null, t('worklist')), h('div', { class: 'row' }, h('button', { onclick: () => { location.hash = '#/import'; } }, t('imp_btn')), h('button', { class: 'pri', onclick: () => { location.hash = '#/patient/new'; } }, '+ ' + t('new_patient')))),
-      patients.length ? panel(null, h('div', { class: 'tw' }, h('table', { class: 'grid' }, h('thead', null, h('tr', null, [t('col_patient'), t('col_id'), t('col_age'), t('col_loc'), t('col_dx'), t('col_students'), t('col_records'), t('col_state')].map((x, i) => h('th', { class: i === 5 || i === 6 ? 'r' : '' }, x)))), h('tbody', null, rows))), { flush: true }) : panel(null, empty(t('patients_empty'))));
-  }
+  async function viewPatients() { return window.HCX.viewPatients(); }
 
   async function viewPatient(id, tab) {
     tab = tab || 'ficha';
@@ -200,7 +192,7 @@
     const base = '#/patient/' + id;
     const actions = [h('button', { onclick: () => { location.hash = base + '/edit'; } }, t('edit')), h('button', { class: 'danger', onclick: async () => { if (patient.archived || confirm(t('confirm_archive'))) { await api('PUT', '/api/patients/' + id, { archived: !patient.archived }); viewPatient(id, tab); } } }, patient.archived ? t('restore') : t('archive'))];
     let body;
-    if (tab === 'ficha') body = [window.HCX.casePdfBar(id), revisions ? h('p', { class: 'mut' }, revisions + ' ' + t('revisions')) : null, fichaPanels(patient, true)];
+    if (tab === 'ficha') body = [window.HCX.casePdfBar(id), await window.HCX.classifyPanel(patient, () => viewPatient(id, tab)), revisions ? h('p', { class: 'mut' }, revisions + ' ' + t('revisions')) : null, fichaPanels(patient, true)];
     else if (tab === 'asignar') body = assignPanel(id, charts, uj, (await api('GET', '/api/patients/' + id + '/consignas')).consignas);
     else if (tab === 'historias') body = panel(null, charts.length ? h('div', { class: 'tw' }, h('table', { class: 'grid' }, h('thead', null, h('tr', null, [t('col_chart'), t('col_type'), t('col_members'), t('col_records'), t('col_last'), t('col_state'), ''].map((x, i) => h('th', { class: i === 3 ? 'r' : '' }, x)))),
       h('tbody', null, charts.map((c) => h('tr', null, h('td', null, h('a', { href: '#/chart/' + c.id }, c.name), c.brief ? h('div', { class: 'sub' }, c.brief.title + (c.brief.total ? ' · ' + c.brief.done + '/' + c.brief.total : '')) : null), h('td', null, h('span', { class: 'chip' }, c.kind === 'team' ? t('team') : t('individual'))), h('td', null, c.members.map((m) => m.name).join(', ')), h('td', { class: 'r' }, c.recs), h('td', null, c.last ? fmtISO(c.last) : '—'), h('td', null, stateChip(c.status === 'open')),
@@ -410,7 +402,7 @@
       charts.length ? panel(null, h('div', { class: 'tw' }, h('table', { class: 'grid' }, h('thead', null, h('tr', null, [t('col_patient'), t('col_age'), t('col_loc'), t('col_dx'), t('col_chart'), t('col_mine'), t('col_state')].map((x, i) => h('th', { class: i === 5 ? 'r' : '' }, x)))), h('tbody', null, rows))), { flush: true }) : panel(null, empty(t('mine_empty'))));
   }
 
-  window.HC = { role: () => (ME && ME.role) || '', campus: () => (ME && ME.campus) || '', h, add, clear, api, toast, fail, panel, empty, field, fmtD, fmtDT, fmtISO, nowInput, show, t, plain, recSummary, lang: () => LANG };
+  window.HC = { ageOf, name, stateChip, role: () => (ME && ME.role) || '', campus: () => (ME && ME.campus) || '', h, add, clear, api, toast, fail, panel, empty, field, fmtD, fmtDT, fmtISO, nowInput, show, t, plain, recSummary, lang: () => LANG };
 
   /* ---------- router ---------- */
   async function route() {

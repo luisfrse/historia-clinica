@@ -122,7 +122,17 @@ function recordsOf(cid, userFilter) {
   return rows.map((r) => ({ id: r.id, user_id: r.user_id, author: r.author, author_role: r.author_role, type: r.type, data: JSON.parse(r.data), occurred: r.occurred, created: r.created, replaces_id: r.replaces_id, void_at: r.void_at, void_reason: r.void_reason, void_name: r.void_name, comments: com.filter((c) => c.record_id === r.id) }));
 }
 const chartComments = (cid) => db.all('SELECT c.id, c.text, c.created, u.name author FROM comments c JOIN users u ON u.id = c.user_id WHERE c.chart_id = ? AND c.record_id IS NULL ORDER BY c.id', cid);
-const patientCard = (p, staff) => { const d = JSON.parse(p.data); return { id: p.id, code: p.code, archived: !!p.archived, created: p.created, updated: p.updated, data: staff ? d : PAT.forStudent(d) }; };
+const patientCard = (p, staff) => { const d = JSON.parse(p.data); return Object.assign({ id: p.id, code: p.code, archived: !!p.archived, created: p.created, updated: p.updated, data: staff ? d : PAT.forStudent(d) }, staff ? { subjects: JSON.parse(p.subjects || '[]'), topics: JSON.parse(p.topics || '[]') } : {}); };
+
+/* ---------- clasificación de pacientes: asignaturas del Campus y temas libres ---------- */
+const campusSlugs = () => { try { return JSON.parse(db.getSetting('campus_subjects', '[]')).map((x) => x.slug); } catch (_) { return []; } };
+const uniq = (a, key) => { const seen = new Set(); return a.filter((x) => { const k = key ? key(x) : x; if (seen.has(k)) return false; seen.add(k); return true; }); };
+function cleanClass(b) {
+  const known = campusSlugs();
+  const subjects = uniq((Array.isArray(b.subjects) ? b.subjects : []).map((x) => U.clip(x, 80)).filter(Boolean)).filter((x) => !known.length || known.includes(x)).slice(0, 20);
+  const topics = uniq((Array.isArray(b.topics) ? b.topics : []).map((x) => U.clip(x, 40)).filter(Boolean), (x) => x.toLowerCase()).slice(0, 15);
+  return { subjects, topics };
+}
 
 /* ---------- rutas ---------- */
 const routes = [];
@@ -197,11 +207,35 @@ R('GET', '/api/patients', async (req, res) => {
   const rows = db.all('SELECT p.*, (SELECT COUNT(*) FROM charts c WHERE c.patient_id = p.id) charts, (SELECT COUNT(*) FROM records r JOIN charts c ON c.id = r.chart_id WHERE c.patient_id = p.id) recs FROM patients p ORDER BY p.archived, p.id DESC');
   json(res, 200, { patients: rows.map((p) => Object.assign(patientCard(p, true), { charts: p.charts, records: p.recs })) });
 }, { staff: true });
+R('GET', '/api/class-options', async (req, res) => {
+  let subjects = []; try { subjects = JSON.parse(db.getSetting('campus_subjects', '[]')).map((x) => ({ slug: x.slug, title: x.title })); } catch (_) { /* sin sincronizar */ }
+  const cnt = new Map(); db.all('SELECT topics FROM patients').forEach((r) => JSON.parse(r.topics || '[]').forEach((t) => { const k = t.toLowerCase(); cnt.set(k, { name: (cnt.get(k) || { name: t }).name, count: ((cnt.get(k) || {}).count || 0) + 1 }); }));
+  json(res, 200, { subjects, topics: [...cnt.values()].sort((a, b) => a.name.localeCompare(b.name)) });
+}, { staff: true });
+R('PUT', '/api/patients/:id/classify', async (req, res, ctx) => {
+  const p = db.get('SELECT id FROM patients WHERE id = ?', intId(ctx.params.id)); if (!p) return bad(res, 'notfound', 404);
+  const c = cleanClass(await readJson(req, 4e3)); db.run('UPDATE patients SET subjects = ?, topics = ? WHERE id = ?', JSON.stringify(c.subjects), JSON.stringify(c.topics), p.id);
+  audit(ctx.user.email, 'paciente-clasificar', '#' + p.id + ' ' + c.subjects.length + ' asignaturas, ' + c.topics.length + ' temas'); json(res, 200, c);
+}, { staff: true });
+R('POST', '/api/patients/classify', async (req, res, ctx) => {
+  const b = await readJson(req, 2e4), ids = uniq((Array.isArray(b.ids) ? b.ids : []).map(intId).filter(Boolean)).slice(0, 500); if (!ids.length) return bad(res, 'ids');
+  const addS = cleanClass({ subjects: b.add_subjects }).subjects, addT = cleanClass({ topics: b.add_topics }).topics;
+  const remS = (Array.isArray(b.remove_subjects) ? b.remove_subjects : []).map(String), remT = (Array.isArray(b.remove_topics) ? b.remove_topics : []).map((x) => String(x).toLowerCase());
+  let n = 0;
+  db.tx(() => ids.forEach((id) => {
+    const p = db.get('SELECT subjects, topics FROM patients WHERE id = ?', id); if (!p) return;
+    const subs = uniq(JSON.parse(p.subjects || '[]').filter((x) => !remS.includes(x)).concat(addS)).slice(0, 20);
+    const tops = uniq(JSON.parse(p.topics || '[]').filter((x) => !remT.includes(x.toLowerCase())).concat(addT), (x) => x.toLowerCase()).slice(0, 15);
+    db.run('UPDATE patients SET subjects = ?, topics = ? WHERE id = ?', JSON.stringify(subs), JSON.stringify(tops), id); n++;
+  }));
+  audit(ctx.user.email, 'pacientes-clasificar', n + ' pacientes'); json(res, 200, { ok: true, updated: n });
+}, { staff: true });
 R('POST', '/api/patients', async (req, res, ctx) => {
-  const { data, error } = PAT.sanitize(await readJson(req, 2e5)); if (error) return bad(res, error);
+  const body0 = await readJson(req, 2e5); const { data, error } = PAT.sanitize(body0); if (error) return bad(res, error);
   const n = db.get('SELECT COALESCE(MAX(id),0)+1 n FROM patients').n;
   const code = 'P' + String(n).padStart(4, '0');
-  const r = db.run('INSERT INTO patients (code, data, created, created_by) VALUES (?,?,?,?)', code, JSON.stringify(data), new Date().toISOString(), ctx.user.id);
+  const cl = cleanClass(body0);
+  const r = db.run('INSERT INTO patients (code, data, subjects, topics, created, created_by) VALUES (?,?,?,?,?,?)', code, JSON.stringify(data), JSON.stringify(cl.subjects), JSON.stringify(cl.topics), new Date().toISOString(), ctx.user.id);
   audit(ctx.user.email, 'paciente-alta', code + ' ' + data.nombre);
   json(res, 200, { id: Number(r.lastInsertRowid), code });
 }, { staff: true });
@@ -620,6 +654,7 @@ function importCase(text, commit, user) {
   const filled = pat.data ? Object.keys(pat.data).filter((k) => !['alergias'].includes(k)).length : 0;
   const out = {
     can_commit: !blocking && !!pat.data, errors, warnings, filled,
+    topics: cleanClass({ topics: r.topics }).topics,
     patient: pat.data ? { nombre: pat.data.nombre, apellidos: pat.data.apellidos, diagnostico: pat.data.diagnostico_medico || '', alergias: pat.data.alergias.length, sin_alergias: !!pat.data.sin_alergias } : null,
     orders: orders.map((x) => ({ drug: x.v[0], dose: x.v[1], route: x.v[2], times: x.v[4], prn: !!x.v[5], start_day: x.v[6], end_day: x.v[7] })),
     events: events.map((x) => ({ kind: x.v[0], day: x.v[1], title: x.v[2] })),
@@ -630,7 +665,7 @@ function importCase(text, commit, user) {
   let id, code; const now = new Date().toISOString();
   db.tx(() => {
     const n = db.get('SELECT COALESCE(MAX(id),0)+1 n FROM patients').n; code = 'P' + String(n).padStart(4, '0');
-    id = Number(db.run('INSERT INTO patients (code, data, created, created_by) VALUES (?,?,?,?)', code, JSON.stringify(pat.data), now, user.id).lastInsertRowid);
+    id = Number(db.run('INSERT INTO patients (code, data, topics, created, created_by) VALUES (?,?,?,?,?)', code, JSON.stringify(pat.data), JSON.stringify(cleanClass({ topics: r.topics }).topics), now, user.id).lastInsertRowid);
     for (const x of orders) db.run('INSERT INTO orders (patient_id, drug, dose, route, freq, times, prn, start_day, end_day, notes, created) VALUES (?,?,?,?,?,?,?,?,?,?,?)', id, ...x.v, now);
     for (const x of events) db.run('INSERT INTO events (patient_id, kind, day, title, body, created) VALUES (?,?,?,?,?,?)', id, ...x.v, now);
     for (const x of consignas) db.run('INSERT INTO consignas (patient_id, title, body, due, tasks, created) VALUES (?,?,?,?,?,?)', id, ...x.v, now);

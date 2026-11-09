@@ -191,3 +191,42 @@ test('aislamiento: tipos en la ficha y en la importación, catálogo ampliado y 
   const full = await get('?lang=ca&full=1', admin); assert.ok(full.text.includes('Notes per al professorat') && full.text.includes('Preparaci'), 'la versión completa lleva notas y todos los días');
   assert.strictEqual((await get('?lang=es', alum)).status, 403, 'el alumnado no descarga el caso');
 });
+
+test('clasificar pacientes por asignatura y tema: individual, en bloque, filtros e importación', async () => {
+  const admin = await sso({ email: 'admin@campus.local', name: 'Admin', admin: true });
+  const alum = await sso({ email: 'f@x.com', name: 'Fer' });
+  const mk = async (n) => (await call('POST', '/api/patients', { nombre: n, apellidos: 'Clasif' }, admin)).json.id;
+  const a = await mk('Ana'), b = await mk('Beto'), c = await mk('Cari');
+  const { db } = require('../server'); db.setSetting('campus_subjects', JSON.stringify([{ slug: 'c6', title: 'C6 (CAI)' }, { slug: 'fisio', title: 'Fisiología' }]));
+  /* individual: valida contra las asignaturas del Campus y limpia temas repetidos */
+  const one = await call('PUT', '/api/patients/' + a + '/classify', { subjects: ['c6', 'inventada', 'c6'], topics: ['Respiratorio', 'respiratorio', ' EPOC '] }, admin);
+  assert.strictEqual(one.status, 200); assert.deepStrictEqual(one.json.subjects, ['c6']); assert.deepStrictEqual(one.json.topics, ['Respiratorio', 'EPOC']);
+  assert.strictEqual((await call('PUT', '/api/patients/' + a + '/classify', { subjects: ['c6'] }, alum)).status, 403);
+  /* editar la ficha no pierde la clasificación */
+  assert.strictEqual((await call('PUT', '/api/patients/' + a, { nombre: 'Ana', apellidos: 'Cambiada' }, admin)).status, 200);
+  const card = (await call('GET', '/api/patients/' + a, null, admin)).json.patient; assert.deepStrictEqual(card.subjects, ['c6']); assert.deepStrictEqual(card.topics, ['Respiratorio', 'EPOC']);
+  /* en bloque: añadir y quitar */
+  const bulk = await call('POST', '/api/patients/classify', { ids: [a, b, c, 99999], add_subjects: ['fisio'], add_topics: ['Diabetes'], remove_topics: ['epoc'] }, admin);
+  assert.strictEqual(bulk.status, 200); assert.strictEqual(bulk.json.updated, 3);
+  const list = (await call('GET', '/api/patients', null, admin)).json.patients, by = (id) => list.find((p) => p.id === id);
+  assert.deepStrictEqual(by(a).subjects, ['c6', 'fisio']); assert.deepStrictEqual(by(a).topics, ['Respiratorio', 'Diabetes']); assert.deepStrictEqual(by(b).subjects, ['fisio']);
+  assert.strictEqual((await call('POST', '/api/patients/classify', { ids: [] }, admin)).status, 400);
+  assert.strictEqual((await call('POST', '/api/patients/classify', { ids: [a] , add_subjects: ['fisio'] }, alum)).status, 403);
+  await call('POST', '/api/patients/classify', { ids: [b], remove_subjects: ['fisio'], remove_topics: ['diabetes'] }, admin);
+  assert.deepStrictEqual((await call('GET', '/api/patients/' + b, null, admin)).json.patient.subjects, []);
+  /* opciones para filtros: asignaturas del Campus y temas con su recuento */
+  const opt = (await call('GET', '/api/class-options', null, admin)).json;
+  assert.deepStrictEqual(opt.subjects.map((x) => x.slug), ['c6', 'fisio']);
+  assert.ok(opt.topics.find((x) => x.name === 'Diabetes').count >= 2, 'cuenta al menos Ana y Cari (más los ejemplos creados antes)');
+  assert.strictEqual((await call('GET', '/api/class-options', null, alum)).status, 403);
+  /* el alumnado no ve la clasificación en las fichas */
+  const created = await call('POST', '/api/patients', { nombre: 'Gus', apellidos: 'Visible', subjects: ['c6'], topics: ['Renal'] }, admin);
+  assert.deepStrictEqual((await call('GET', '/api/patients/' + created.json.id, null, admin)).json.patient.topics, ['Renal'], 'al crear también se puede clasificar');
+  /* importar: la IA propone los temas; las asignaturas las eliges tú */
+  const IMPL = require('../lib/import');
+  assert.deepStrictEqual(IMPL.parse('[FICHA]\nNombre: A\nApellidos: B\nTemas: Respiratorio, EPOC; Oxigenoterapia\n', '2025-01-01').topics, ['Respiratorio', 'EPOC', 'Oxigenoterapia']);
+  assert.deepStrictEqual(IMPL.parse('[FITXA]\nNom: A\nCognoms: B\nTemes: Respiratori, MPOC\n', '2025-01-01').topics, ['Respiratori', 'MPOC']);
+  assert.deepStrictEqual(IMPL.parse(IMPL.TEMPLATES.es.slice(IMPL.TEMPLATES.es.indexOf('[FICHA]')).replace('Nombre:', 'Nombre: Z').replace('Apellidos:', 'Apellidos: Y'), '2025-01-01').topics, [], 'la sugerencia de la plantilla sin rellenar no cuenta');
+  const ex = await call('POST', '/api/import/example', { lang: 'ca' }, admin);
+  assert.deepStrictEqual((await call('GET', '/api/patients/' + ex.json.id, null, admin)).json.patient.topics, ['Respiratori', 'MPOC', 'Oxigenoteràpia', 'Diabetis']);
+});

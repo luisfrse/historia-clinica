@@ -190,3 +190,7 @@ textarea.mono { font-family: ui-monospace, Consolas, 'Courier New', monospace; f
 tr.locked { opacity: .65; cursor: default; }
 .win { display: inline-block; } .win > summary { cursor: pointer; color: var(--mut); font-size: .9rem; } .win[open] { display: block; flex-basis: 100%; }
 .danger-zone > summary { color: #a12; }
+/* clasificación de pacientes */
+.chip.tag { background: var(--acc-soft); color: var(--acc); } .chip.tag .link { padding: 0 2px; min-height: 0; text-decoration: none; }
+.tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.toolbar.row input[type=search] { max-width: 320px; }
