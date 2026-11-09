@@ -1,0 +1,13 @@
+{
+  "name": "historia-clinica",
+  "version": "0.1.0",
+  "description": "Historia clínica simulada para prácticas de Enfermería y TCAE, integrada con el Campus",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server.js",
+    "test": "node --disable-warning=ExperimentalWarning --test test/"
+  },
+  "engines": { "node": ">=22" },
+  "license": "UNLICENSED",
+  "private": true
+}
