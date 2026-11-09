@@ -434,7 +434,7 @@ R('DELETE', '/api/events/:id', async (req, res, ctx) => { db.run('DELETE FROM ev
 
 /* --- importar un caso desde texto plano (lo que devuelve una IA) --- */
 const IMP = require('./lib/import');
-R('GET', '/api/import/template', async (req, res) => json(res, 200, { template: IMP.TEMPLATE }), { staff: true });
+R('GET', '/api/import/template', async (req, res) => json(res, 200, { template: IMP.TEMPLATES.ca, templates: IMP.TEMPLATES }), { staff: true });
 function importCase(text, commit, user) {
   const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
   const r = IMP.parse(text, today), errors = r.errors.slice(), warnings = r.warnings.slice();
@@ -469,11 +469,12 @@ R('POST', '/api/import', async (req, res, ctx) => {
 }, { staff: true });
 /* Caso de ejemplo ya trabajado: paciente, historia y algunos registros del alumno de prueba, para ver cómo queda. */
 R('POST', '/api/import/example', async (req, res, ctx) => {
-  const r = importCase(IMP.EXAMPLE, true, ctx.user); if (r.status !== 200) return json(res, r.status, r.body);
+  const eb = await readJson(req, 1e3), lang = eb.lang === 'es' ? 'es' : 'ca';
+  const r = importCase(IMP.EXAMPLES[lang], true, ctx.user); if (r.status !== 200) return json(res, r.status, r.body);
   const now = new Date(), pad2 = (n) => String(n).padStart(2, '0');
   const at = (daysAgo, hm) => { const d = new Date(now.getTime() - daysAgo * 864e5); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + 'T' + hm; };
   const demo = demoUser('enfermeria');
-  const chartId = Number(db.run("INSERT INTO charts (patient_id, kind, name, day, created) VALUES (?,'team',?,3,?)", r.body.id, 'Historia de ejemplo', now.toISOString()).lastInsertRowid);
+  const chartId = Number(db.run("INSERT INTO charts (patient_id, kind, name, day, created) VALUES (?,'team',?,3,?)", r.body.id, (lang === 'ca' ? 'Història d\'exemple' : 'Historia de ejemplo'), now.toISOString()).lastInsertRowid);
   db.run('INSERT INTO chart_members (chart_id, user_id, role) VALUES (?,?,?)', chartId, demo.id, 'enfermeria');
   const orderByDrug = (d) => db.get('SELECT * FROM orders WHERE patient_id = ? AND drug = ?', r.body.id, d);
   const ctxv = { role: 'enfermeria', catalog: catalogGet, order: (oid) => db.get('SELECT * FROM orders WHERE id = ? AND patient_id = ?', oid, r.body.id), record: () => null };
@@ -484,11 +485,12 @@ R('POST', '/api/import/example', async (req, res, ctx) => {
     ['constantes', { ta_sis: 132, ta_dia: 80, fc: 86, fr: 20, temp: 36.9, spo2: 93, glucemia: 245 }, at(1, '20:00')],
     ['constantes', { ta_sis: 128, ta_dia: 78, fc: 82, fr: 18, temp: 36.8, spo2: 95, dolor: 1 }, at(0, '08:00')],
     ['balance', { dir: 'ingesta', via: 'oral', ml: 600 }, at(1, '14:00')], ['balance', { dir: 'ingesta', via: 'iv', ml: 500 }, at(1, '16:00')], ['balance', { dir: 'eliminacion', via: 'diuresis', ml: 900 }, at(1, '18:00')],
-    ['nota', { texto: 'Paciente consciente y orientada, con disnea al hablar. Se mantiene con gafas nasales a 2 l/min. Tolera la dieta. Refiere tos con expectoración amarillenta.', turno: 'M', tipo: 'evolucion' }, at(1, '10:00')],
+    ['nota', { texto: lang === 'ca' ? 'Pacient conscient i orientada, amb dispnea en parlar. Es manté amb ulleres nasals a 2 l/min. Tolera la dieta. Refereix tos amb expectoració groguenca.' : 'Paciente consciente y orientada, con disnea al hablar. Se mantiene con gafas nasales a 2 l/min. Tolera la dieta. Refiere tos con expectoración amarillenta.', turno: 'M', tipo: 'evolucion' }, at(1, '10:00')],
     ['escala', { scale: 'barthel', items: { comer: 10, lavarse: 5, vestirse: 5, arreglarse: 5, deposicion: 10, miccion: 10, retrete: 5, traslado: 10, deambulacion: 10, escaleras: 5 } }, at(1, '11:00')],
   ];
-  const par = orderByDrug('Paracetamol'); if (par) recs.push(['medicacion', { order_id: par.id, slot: '08:00', estado: 'administrada' }, at(0, '08:05')]);
-  const lev = orderByDrug('Levofloxacino'); if (lev) recs.push(['medicacion', { order_id: lev.id, slot: '10:00', estado: 'administrada' }, at(0, '10:10')]);
+  const par = orderByDrug('Paracetamol');
+  const levName = lang === 'ca' ? 'Levofloxacina' : 'Levofloxacino'; if (par) recs.push(['medicacion', { order_id: par.id, slot: '08:00', estado: 'administrada' }, at(0, '08:05')]);
+  const lev = orderByDrug(levName); if (lev) recs.push(['medicacion', { order_id: lev.id, slot: '10:00', estado: 'administrada' }, at(0, '10:10')]);
   let n = 0;
   for (const [type, d, occ] of recs) { try { const data = CAT.validate(type, d, ctxv); db.run('INSERT INTO records (chart_id, user_id, author_role, type, data, occurred, created) VALUES (?,?,?,?,?,?,?)', chartId, demo.id, 'enfermeria', type, JSON.stringify(data), occ, now.toISOString()); n++; } catch (e) { /* un registro no válido no impide el ejemplo */ } }
   audit(ctx.user.email, 'caso-ejemplo', r.body.code + ' (' + n + ' registros)');
