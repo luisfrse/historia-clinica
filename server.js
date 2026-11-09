@@ -54,7 +54,12 @@ function userOf(req) {
   const s = db.get('SELECT * FROM sessions WHERE hash = ?', U.sha(tok));
   if (!s) return null;
   if (s.exp < Date.now()) { db.run('DELETE FROM sessions WHERE hash = ?', s.hash); return null; }
-  return db.get('SELECT * FROM users WHERE id = ? AND active = 1', s.user_id) || null;
+  const real = db.get('SELECT * FROM users WHERE id = ? AND active = 1', s.user_id) || null;
+  if (real && s.as_user && isStaff(real)) {
+    const as = db.get('SELECT * FROM users WHERE id = ? AND active = 1', s.as_user);
+    if (as) return Object.assign({}, as, { _preview: true, _real: real.email });
+  }
+  return real;
 }
 const isStaff = (u) => !!u && (u.role === 'admin' || u.role === 'teacher');
 function audit(who, action, detail) { db.run('INSERT INTO audit (ts, who, action, detail) VALUES (?,?,?,?)', new Date().toISOString(), who, action, U.clip(detail || '', 300)); }
@@ -97,7 +102,7 @@ const visibleOrders = (chart) => db.all('SELECT * FROM orders WHERE patient_id =
 const visibleEvents = (chart) => db.all('SELECT * FROM events WHERE patient_id = ? AND day <= ? ORDER BY day, id', chart.patient_id, chart.day);
 const evOut = (e) => ({ id: e.id, kind: e.kind, day: e.day, title: e.title, body: e.body });
 const catalogGet = (id) => db.get('SELECT * FROM catalog WHERE id = ?', id);
-const membersOf = (cid) => db.all('SELECT u.id, u.name, u.email, m.role FROM chart_members m JOIN users u ON u.id = m.user_id WHERE m.chart_id = ? ORDER BY u.name COLLATE NOCASE', cid);
+const membersOf = (cid) => db.all('SELECT u.id, u.name, u.email, m.role FROM chart_members m JOIN users u ON u.id = m.user_id WHERE m.chart_id = ? AND u.email NOT LIKE ? ORDER BY u.name COLLATE NOCASE', cid, '%@historia.local');
 function recordsOf(cid, userFilter) {
   const rows = db.all('SELECT r.*, u.name author, v.name void_name FROM records r JOIN users u ON u.id = r.user_id LEFT JOIN users v ON v.id = r.void_by WHERE r.chart_id = ?' + (userFilter ? ' AND r.user_id = ' + (parseInt(userFilter, 10) || 0) : '') + ' ORDER BY r.occurred DESC, r.id DESC', cid);
   const com = db.all('SELECT c.id, c.record_id, c.text, c.created, u.name author FROM comments c JOIN users u ON u.id = c.user_id WHERE c.chart_id = ? ORDER BY c.id', cid);
@@ -143,13 +148,25 @@ R('POST', '/api/admin/login', async (req, res) => {
   audit(u.email, 'login-admin', '');
   json(res, 200, { ok: true }, { 'Set-Cookie': setCookie(req, newSession(u.id), TTL / 1000) });
 }, { open: true });
+const pwHash = (pw) => { const salt = crypto.randomBytes(16); return salt.toString('base64') + ':' + crypto.scryptSync(pw, salt, 32).toString('base64'); };
+const pwCheck = (pw, stored) => { try { const [sl, hs] = String(stored || '').split(':'); const a = crypto.scryptSync(String(pw), Buffer.from(sl, 'base64'), 32), b = Buffer.from(hs, 'base64'); return a.length === b.length && crypto.timingSafeEqual(a, b); } catch (_) { return false; } };
+R('POST', '/api/teacher/login', async (req, res) => {
+  const ip = ipOf(req);
+  if (limLogin.blocked(ip)) return bad(res, 'rate', 429);
+  const b = await readJson(req, 2e3), email = String(b.email || '').toLowerCase().trim();
+  const u = db.get("SELECT * FROM users WHERE email = ? AND role = 'teacher' AND active = 1", email);
+  const ok = pwCheck(b.password, u && u.pw) && !!u;
+  if (!ok) { limLogin.fail(ip); audit(email || '?', 'login-fallido', ip); return bad(res, 'auth', 401); }
+  limLogin.ok(ip); db.run('UPDATE users SET last_login = ? WHERE id = ?', new Date().toISOString(), u.id); audit(u.email, 'login-profesorado', '');
+  json(res, 200, { ok: true }, { 'Set-Cookie': setCookie(req, newSession(u.id), TTL / 1000) });
+}, { open: true });
 R('POST', '/api/logout', async (req, res) => {
   const tok = cookies(req).hid; if (tok) db.run('DELETE FROM sessions WHERE hash = ?', U.sha(tok));
   json(res, 200, { ok: true }, { 'Set-Cookie': setCookie(req, '', 0) });
 });
 R('GET', '/api/me', async (req, res, ctx) => {
   const u = ctx.user;
-  json(res, 200, { id: u.id, name: u.name, email: u.email, role: u.role, profile: u.profile, lang: u.lang, campus: CAMPUS_URL, staff: isStaff(u) });
+  json(res, 200, { id: u.id, name: u.name, email: u.email, role: u.role, profile: u.profile, lang: u.lang, campus: CAMPUS_URL, staff: isStaff(u), preview: !!u._preview });
 });
 R('PUT', '/api/me', async (req, res, ctx) => {
   const b = await readJson(req, 2e3);
@@ -259,7 +276,7 @@ R('DELETE', '/api/charts/:id/members/:uid', async (req, res, ctx) => {
 /* --- alumnado --- */
 R('GET', '/api/users', async (req, res, ctx) => {
   const q = U.normName(ctx.url.searchParams.get('q') || '');
-  let rows = db.all("SELECT id, name, email, role, profile, profile_manual, lang, subjects, active, last_login FROM users WHERE role != 'admin' ORDER BY name COLLATE NOCASE");
+  let rows = db.all("SELECT id, name, email, role, profile, profile_manual, lang, subjects, active, last_login FROM users WHERE role != 'admin' AND email NOT LIKE '%@historia.local' ORDER BY name COLLATE NOCASE");
   if (q) rows = rows.filter((r) => U.normName(r.name + ' ' + r.email).includes(q));
   json(res, 200, { users: rows.slice(0, 1000).map((r) => Object.assign(r, { subjects: JSON.parse(r.subjects) })), subject_profiles: JSON.parse(db.getSetting('subject_profiles', '{}')), subjects: JSON.parse(db.getSetting('campus_subjects', '[]')) });
 }, { staff: true });
@@ -415,14 +432,107 @@ R('PUT', '/api/events/:id', async (req, res, ctx) => {
 }, { staff: true });
 R('DELETE', '/api/events/:id', async (req, res, ctx) => { db.run('DELETE FROM events WHERE id = ?', intId(ctx.params.id)); json(res, 200, { ok: true }); }, { staff: true });
 
-/* --- profesorado adicional (solo administración) --- */
-R('PUT', '/api/users/:id/role', async (req, res, ctx) => {
-  if (ctx.user.role !== 'admin') return bad(res, 'forbidden', 403);
-  const u = db.get("SELECT * FROM users WHERE id = ? AND role != 'admin'", intId(ctx.params.id)); if (!u) return bad(res, 'notfound', 404);
-  const b = await readJson(req, 2e3); const role = b.role === 'teacher' ? 'teacher' : 'student';
-  db.run('UPDATE users SET role = ? WHERE id = ?', role, u.id); audit(ctx.user.email, 'usuario-rol', u.email + ' → ' + role);
-  json(res, 200, { ok: true });
+/* --- importar un caso desde texto plano (lo que devuelve una IA) --- */
+const IMP = require('./lib/import');
+R('GET', '/api/import/template', async (req, res) => json(res, 200, { template: IMP.TEMPLATE }), { staff: true });
+function importCase(text, commit, user) {
+  const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  const r = IMP.parse(text, today), errors = r.errors.slice(), warnings = r.warnings.slice();
+  const pat = PAT.sanitize(r.patient); if (pat.error) errors.push({ line: 0, msg: 'Ficha no válida (' + pat.error + ').' });
+  const orders = [], events = [];
+  for (const o of r.orders) { const f = orderFields(o, null); if (f.error) errors.push({ line: o.n, msg: 'Prescripción «' + o.drug + '» no válida (' + f.error + ').' }); else orders.push({ line: o.n, v: f.v, o }); }
+  for (const e of r.events) { const f = eventFields(e, null); if (f.error) errors.push({ line: e.n, msg: 'Evento «' + e.title + '» no válido (' + f.error + ').' }); else events.push({ line: e.n, v: f.v, e }); }
+  const blocking = errors.some((e) => e.line === 0);
+  const filled = pat.data ? Object.keys(pat.data).filter((k) => !['alergias'].includes(k)).length : 0;
+  const out = {
+    can_commit: !blocking && !!pat.data, errors, warnings, filled,
+    patient: pat.data ? { nombre: pat.data.nombre, apellidos: pat.data.apellidos, diagnostico: pat.data.diagnostico_medico || '', alergias: pat.data.alergias.length, sin_alergias: !!pat.data.sin_alergias } : null,
+    orders: orders.map((x) => ({ drug: x.v[0], dose: x.v[1], route: x.v[2], times: x.v[4], prn: !!x.v[5], start_day: x.v[6], end_day: x.v[7] })),
+    events: events.map((x) => ({ kind: x.v[0], day: x.v[1], title: x.v[2] })),
+  };
+  if (!commit) return { status: 200, body: out };
+  if (!out.can_commit) return { status: 400, body: { error: 'El texto tiene errores en la ficha: corrígelos antes de crear el caso.' } };
+  let id, code; const now = new Date().toISOString();
+  db.tx(() => {
+    const n = db.get('SELECT COALESCE(MAX(id),0)+1 n FROM patients').n; code = 'P' + String(n).padStart(4, '0');
+    id = Number(db.run('INSERT INTO patients (code, data, created, created_by) VALUES (?,?,?,?)', code, JSON.stringify(pat.data), now, user.id).lastInsertRowid);
+    for (const x of orders) db.run('INSERT INTO orders (patient_id, drug, dose, route, freq, times, prn, start_day, end_day, notes, created) VALUES (?,?,?,?,?,?,?,?,?,?,?)', id, ...x.v, now);
+    for (const x of events) db.run('INSERT INTO events (patient_id, kind, day, title, body, created) VALUES (?,?,?,?,?,?)', id, ...x.v, now);
+  });
+  audit(user.email, 'caso-importado', code + ' ' + pat.data.nombre + ' (' + orders.length + ' prescripciones, ' + events.length + ' eventos)');
+  return { status: 200, body: Object.assign(out, { id, code }) };
+}
+R('POST', '/api/import', async (req, res, ctx) => {
+  const b = await readJson(req, 3e5), text = String(b.text || '');
+  if (text.trim().length < 20) return bad(res, 'Pega el texto del caso.');
+  const r = importCase(text, !!b.commit, ctx.user); json(res, r.status, r.body);
 }, { staff: true });
+/* Caso de ejemplo ya trabajado: paciente, historia y algunos registros del alumno de prueba, para ver cómo queda. */
+R('POST', '/api/import/example', async (req, res, ctx) => {
+  const r = importCase(IMP.EXAMPLE, true, ctx.user); if (r.status !== 200) return json(res, r.status, r.body);
+  const now = new Date(), pad2 = (n) => String(n).padStart(2, '0');
+  const at = (daysAgo, hm) => { const d = new Date(now.getTime() - daysAgo * 864e5); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + 'T' + hm; };
+  const demo = demoUser('enfermeria');
+  const chartId = Number(db.run("INSERT INTO charts (patient_id, kind, name, day, created) VALUES (?,'team',?,3,?)", r.body.id, 'Historia de ejemplo', now.toISOString()).lastInsertRowid);
+  db.run('INSERT INTO chart_members (chart_id, user_id, role) VALUES (?,?,?)', chartId, demo.id, 'enfermeria');
+  const orderByDrug = (d) => db.get('SELECT * FROM orders WHERE patient_id = ? AND drug = ?', r.body.id, d);
+  const ctxv = { role: 'enfermeria', catalog: catalogGet, order: (oid) => db.get('SELECT * FROM orders WHERE id = ? AND patient_id = ?', oid, r.body.id), record: () => null };
+  const recs = [
+    ['constantes', { ta_sis: 142, ta_dia: 88, fc: 98, fr: 24, temp: 37.8, spo2: 90, dolor: 3, conciencia: 'alerta' }, at(2, '08:00')],
+    ['constantes', { ta_sis: 138, ta_dia: 84, fc: 94, fr: 22, temp: 38.4, spo2: 91, dolor: 3 }, at(2, '20:00')],
+    ['constantes', { ta_sis: 135, ta_dia: 80, fc: 88, fr: 20, temp: 37.2, spo2: 93, glucemia: 168 }, at(1, '08:00')],
+    ['constantes', { ta_sis: 132, ta_dia: 80, fc: 86, fr: 20, temp: 36.9, spo2: 93, glucemia: 245 }, at(1, '20:00')],
+    ['constantes', { ta_sis: 128, ta_dia: 78, fc: 82, fr: 18, temp: 36.8, spo2: 95, dolor: 1 }, at(0, '08:00')],
+    ['balance', { dir: 'ingesta', via: 'oral', ml: 600 }, at(1, '14:00')], ['balance', { dir: 'ingesta', via: 'iv', ml: 500 }, at(1, '16:00')], ['balance', { dir: 'eliminacion', via: 'diuresis', ml: 900 }, at(1, '18:00')],
+    ['nota', { texto: 'Paciente consciente y orientada, con disnea al hablar. Se mantiene con gafas nasales a 2 l/min. Tolera la dieta. Refiere tos con expectoración amarillenta.', turno: 'M', tipo: 'evolucion' }, at(1, '10:00')],
+    ['escala', { scale: 'barthel', items: { comer: 10, lavarse: 5, vestirse: 5, arreglarse: 5, deposicion: 10, miccion: 10, retrete: 5, traslado: 10, deambulacion: 10, escaleras: 5 } }, at(1, '11:00')],
+  ];
+  const par = orderByDrug('Paracetamol'); if (par) recs.push(['medicacion', { order_id: par.id, slot: '08:00', estado: 'administrada' }, at(0, '08:05')]);
+  const lev = orderByDrug('Levofloxacino'); if (lev) recs.push(['medicacion', { order_id: lev.id, slot: '10:00', estado: 'administrada' }, at(0, '10:10')]);
+  let n = 0;
+  for (const [type, d, occ] of recs) { try { const data = CAT.validate(type, d, ctxv); db.run('INSERT INTO records (chart_id, user_id, author_role, type, data, occurred, created) VALUES (?,?,?,?,?,?,?)', chartId, demo.id, 'enfermeria', type, JSON.stringify(data), occ, now.toISOString()); n++; } catch (e) { /* un registro no válido no impide el ejemplo */ } }
+  audit(ctx.user.email, 'caso-ejemplo', r.body.code + ' (' + n + ' registros)');
+  json(res, 200, { id: r.body.id, code: r.body.code, chart_id: chartId, records: n });
+}, { staff: true });
+
+/* --- profesorado adicional (solo administración): cuentas propias con correo y contraseña --- */
+R('POST', '/api/teachers', async (req, res, ctx) => {
+  if (ctx.user.role !== 'admin') return bad(res, 'forbidden', 403);
+  const b = await readJson(req, 2e3), email = String(b.email || '').toLowerCase().trim(), name = U.clip(b.name, 120), pw = String(b.password || '');
+  if (!U.validEmail(email) || !name) return bad(res, 'Escribe nombre y un correo válido.');
+  if (pw.length < 10) return bad(res, 'La contraseña debe tener al menos 10 caracteres.');
+  const ex = db.get('SELECT * FROM users WHERE email = ?', email);
+  if (ex && ex.role !== 'teacher') return bad(res, 'Ese correo ya existe como alumnado o administración.', 409);
+  if (ex) db.run('UPDATE users SET name = ?, pw = ?, active = 1 WHERE id = ?', name, pwHash(pw), ex.id);
+  else db.run("INSERT INTO users (email, name, role, profile, lang, subjects, pw, created) VALUES (?,?,'teacher','enfermeria','es','[]',?,?)", email, name, pwHash(pw), new Date().toISOString());
+  audit(ctx.user.email, 'profesorado-alta', email); json(res, 200, { ok: true });
+}, { staff: true });
+R('DELETE', '/api/teachers/:id', async (req, res, ctx) => {
+  if (ctx.user.role !== 'admin') return bad(res, 'forbidden', 403);
+  const u = db.get("SELECT * FROM users WHERE id = ? AND role = 'teacher'", intId(ctx.params.id)); if (!u) return bad(res, 'notfound', 404);
+  db.run('UPDATE users SET active = 0, pw = NULL WHERE id = ?', u.id); db.run('DELETE FROM sessions WHERE user_id = ?', u.id);
+  audit(ctx.user.email, 'profesorado-baja', u.email); json(res, 200, { ok: true });
+}, { staff: true });
+
+/* --- ver la historia como la ve el alumnado (solo lectura) --- */
+const DEMO_DOMAIN = '@historia.local';
+function demoUser(profile) {
+  profile = profile === 'tcae' ? 'tcae' : 'enfermeria';
+  const email = 'alumno.prueba.' + profile + DEMO_DOMAIN;
+  const u = db.get('SELECT * FROM users WHERE email = ?', email); if (u) return u;
+  db.run("INSERT INTO users (email, name, role, profile, profile_manual, lang, subjects, created) VALUES (?,?,'student',?,1,'es','[]',?)", email, profile === 'tcae' ? 'Alumno de prueba (TCAE)' : 'Alumno de prueba (Enfermería)', profile, new Date().toISOString());
+  return db.get('SELECT * FROM users WHERE email = ?', email);
+}
+R('POST', '/api/charts/:id/preview', async (req, res, ctx) => {
+  const c = db.get('SELECT * FROM charts WHERE id = ?', intId(ctx.params.id)); if (!c) return bad(res, 'notfound', 404);
+  const b = await readJson(req, 1e3), u = demoUser(b.profile);
+  db.run('INSERT OR IGNORE INTO chart_members (chart_id, user_id, role) VALUES (?,?,?)', c.id, u.id, u.profile);
+  db.run('UPDATE sessions SET as_user = ? WHERE hash = ?', u.id, U.sha(cookies(req).hid));
+  audit(ctx.user.email, 'vista-alumno', '#' + c.id + ' ' + u.profile); json(res, 200, { ok: true });
+}, { staff: true });
+R('POST', '/api/preview/exit', async (req, res, ctx) => {
+  db.run('UPDATE sessions SET as_user = NULL WHERE hash = ?', U.sha(cookies(req).hid)); json(res, 200, { ok: true });
+});
 
 /* --- evaluación: rúbrica y notas --- */
 const DEF_RUBRIC = [
@@ -519,6 +629,7 @@ const server = http.createServer(async (req, res) => {
         if (!ctx.user) { req.resume(); return json(res, 401, { error: 'auth' }); }
         if (r.staff && !isStaff(ctx.user)) { req.resume(); return json(res, 403, { error: 'forbidden' }); }
       }
+      if (ctx.user && ctx.user._preview && req.method !== 'GET' && pathname !== '/api/preview/exit' && pathname !== '/api/logout') { req.resume(); return json(res, 403, { error: 'preview' }); }
       if (req.method !== 'GET' && !csrfOk(req) && !(r.open && pathname === '/sso')) { req.resume(); return json(res, 403, { error: 'csrf' }); }
       return await r.fn(req, res, ctx);
     }

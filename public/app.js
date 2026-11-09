@@ -47,7 +47,7 @@
     if (!r.ok) { const e = new Error((j && j.error) || 'error'); e.status = r.status; throw e; }
     return j;
   }
-  const fail = (e) => { if (e.message !== 'auth') toast(t('err') + (e.message && e.message !== 'error' ? ' (' + e.message + ')' : ''), true); };
+  const fail = (e) => { if (e.message === 'preview') return toast(t('prev_ro'), true); if (e.message !== 'auth') toast(t('err') + (e.message && e.message !== 'error' ? ' (' + e.message + ')' : ''), true); };
   const pad = (n) => String(n).padStart(2, '0');
   const fmtD = (s) => (s && /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4) : '');
   const fmtDT = (s) => (s ? s.slice(8, 10) + '/' + s.slice(5, 7) + ' ' + s.slice(11, 16) : '');
@@ -85,14 +85,15 @@
       add(top, h('span', { class: 'who' }, ME.name));
     } else add(top, h('nav'));
     add(top, h('button', { class: 'tb', 'aria-label': t('lang'), onclick: () => { LANG = LANG === 'es' ? 'ca' : 'es'; document.documentElement.lang = LANG; if (ME) api('PUT', '/api/me', { lang: LANG }).catch(() => {}); renderTop(); ME ? route() : renderLogin(); } }, LANG === 'es' ? 'CA' : 'ES'));
+    if (ME && ME.preview) add(top, h('button', { class: 'tb warn', onclick: async () => { try { await api('POST', '/api/preview/exit'); await boot(); location.hash = '#/'; } catch (e) { fail(e); } } }, t('prev_exit')));
     if (ME) add(top, h('button', { class: 'tb', onclick: async () => { await api('POST', '/api/logout').catch(() => {}); ME = null; renderLogin(); } }, t('logout')));
   }
 
   function renderLogin() {
     renderTop();
-    const pw = h('input', { type: 'password', autocomplete: 'current-password' });
-    const f = h('form', { onsubmit: async (e) => { e.preventDefault(); try { await api('POST', '/api/admin/login', { password: pw.value }); await boot(); } catch (er) { toast(er.status === 429 ? 'Demasiados intentos' : 'Contraseña incorrecta', true); } } },
-      field(t('admin_pw'), pw), h('p', null, h('button', { class: 'pri', type: 'submit' }, t('enter'))));
+    const pw = h('input', { type: 'password', autocomplete: 'current-password' }), em = h('input', { type: 'email', autocomplete: 'username', placeholder: t('login_email_ph') });
+    const f = h('form', { onsubmit: async (e) => { e.preventDefault(); try { if (em.value.trim()) await api('POST', '/api/teacher/login', { email: em.value, password: pw.value }); else await api('POST', '/api/admin/login', { password: pw.value }); await boot(); } catch (er) { toast(er.status === 429 ? 'Demasiados intentos' : 'Contraseña incorrecta', true); } } },
+      field(t('login_email'), em), field(t('admin_pw'), pw), h('p', null, h('button', { class: 'pri', type: 'submit' }, t('enter'))));
     show(h('div', { class: 'login' }, panel(t('login_title'), [h('p', null, t('login_campus')), h('p', null, h('a', { class: 'btn pri', href: 'https://campus.luisfs.com' }, t('login_btn')))]),
       h('details', { class: 'panel' }, h('summary', null, t('admin_pw')), h('div', { class: 'pb' }, f))));
   }
@@ -185,7 +186,7 @@
       h('td', null, h('a', { href: '#/patient/' + p.id, onclick: (e) => e.stopPropagation() }, name(d))), h('td', null, d.nhc || p.code), h('td', null, (age !== '' ? age + ' ' + t('age_years') : '') + (d.sexo ? ' / ' + t('sex_' + d.sexo) : '')),
       h('td', null, [d.unidad, d.habitacion && 'H ' + d.habitacion, d.cama && 'C ' + d.cama].filter(Boolean).join(' / ')), h('td', null, d.diagnostico_medico || ''),
       h('td', { class: 'r' }, p.charts), h('td', { class: 'r' }, p.records), h('td', null, p.archived ? h('span', { class: 'chip amb' }, t('archived')) : h('span', { class: 'chip grn' }, t('status_open')))); });
-    show(h('div', { class: 'pg-title' }, h('h1', null, t('worklist')), h('button', { class: 'pri', onclick: () => { location.hash = '#/patient/new'; } }, '+ ' + t('new_patient'))),
+    show(h('div', { class: 'pg-title' }, h('h1', null, t('worklist')), h('div', { class: 'row' }, h('button', { onclick: () => { location.hash = '#/import'; } }, t('imp_btn')), h('button', { class: 'pri', onclick: () => { location.hash = '#/patient/new'; } }, '+ ' + t('new_patient')))),
       patients.length ? panel(null, h('div', { class: 'tw' }, h('table', { class: 'grid' }, h('thead', null, h('tr', null, [t('col_patient'), t('col_id'), t('col_age'), t('col_loc'), t('col_dx'), t('col_students'), t('col_records'), t('col_state')].map((x, i) => h('th', { class: i === 5 || i === 6 ? 'r' : '' }, x)))), h('tbody', null, rows))), { flush: true }) : panel(null, empty(t('patients_empty'))));
   }
 
@@ -241,22 +242,23 @@
   async function viewStudents() {
     const j = await api('GET', '/api/users');
     const map = Object.assign({}, j.subject_profiles);
-    const row = (u) => h('tr', null, h('td', null, u.name, u.role === 'teacher' ? h('span', { class: 'chip' }, t('role_teacher')) : null, h('div', { class: 'sub' }, u.email)),
+    const row = (u) => h('tr', null, h('td', null, u.name, h('div', { class: 'sub' }, u.email)),
       h('td', null, h('select', { 'aria-label': t('role_prof'), onchange: async (e) => { try { await api('PUT', '/api/users/' + u.id, { profile: e.target.value }); toast(t('ok')); } catch (er) { fail(er); } } },
         h('option', { value: 'auto', selected: !u.profile_manual }, t('p_auto') + ' → ' + t('p_' + u.profile)), h('option', { value: 'enfermeria', selected: !!u.profile_manual && u.profile === 'enfermeria' }, t('p_enfermeria')), h('option', { value: 'tcae', selected: !!u.profile_manual && u.profile === 'tcae' }, t('p_tcae')))),
       h('td', null, u.last_login ? fmtISO(u.last_login) : '—'),
-      h('td', null, h('label', { class: 'row' }, h('input', { type: 'checkbox', checked: !!u.active, onchange: async (e) => { try { await api('PUT', '/api/users/' + u.id, { active: e.target.checked }); } catch (er) { fail(er); } } }), t('active')), ME.role === 'admin' ? h('button', { class: 'sm', onclick: async () => { try { await api('PUT', '/api/users/' + u.id + '/role', { role: u.role === 'teacher' ? 'student' : 'teacher' }); viewStudents(); } catch (er) { fail(er); } } }, u.role === 'teacher' ? t('remove_teacher') : t('make_teacher')) : null));
+      h('td', null, h('label', { class: 'row' }, h('input', { type: 'checkbox', checked: !!u.active, onchange: async (e) => { try { await api('PUT', '/api/users/' + u.id, { active: e.target.checked }); } catch (er) { fail(er); } } }), t('active'))));
     const groupCard = (title, list) => h('details', { class: 'panel', open: true }, h('summary', null, h('span', null, title, ' ', h('span', { class: 'chip' }, list.length))),
       h('div', { class: 'tw' }, h('table', { class: 'grid' }, h('thead', null, h('tr', null, h('th', null, t('nav_students')), h('th', null, t('role_prof')), h('th', null, t('last_login')), h('th', null, ''))), h('tbody', null, list.map(row)))));
+    const students = j.users.filter((u) => u.role !== 'teacher'), teachers = j.users.filter((u) => u.role === 'teacher');
     const known = new Set(j.subjects.map((s) => s.slug));
-    const groups = j.subjects.map((s) => [s.title, j.users.filter((u) => u.subjects.includes(s.slug))]).filter((g) => g[1].length);
-    const none = j.users.filter((u) => !u.subjects.some((x) => known.has(x)));
+    const groups = j.subjects.map((s) => [s.title, students.filter((u) => u.subjects.includes(s.slug))]).filter((g) => g[1].length);
+    const none = students.filter((u) => !u.subjects.some((x) => known.has(x)));
     if (none.length) groups.push([t('no_subject'), none]);
     const sp = j.subjects.length ? h('details', { class: 'panel' }, h('summary', null, t('subj_profiles')), h('div', { class: 'pb' }, h('p', { class: 'mut' }, t('subj_profiles_help')),
       j.subjects.map((s) => h('div', { class: 'row' }, h('span', null, s.title), h('select', { 'aria-label': s.title, onchange: (e) => { if (e.target.value) map[s.slug] = e.target.value; else delete map[s.slug]; } }, h('option', { value: '' }, '—'), h('option', { value: 'enfermeria', selected: map[s.slug] === 'enfermeria' }, t('p_enfermeria')), h('option', { value: 'tcae', selected: map[s.slug] === 'tcae' }, t('p_tcae'))))),
       h('p', null, h('button', { onclick: async () => { try { await api('PUT', '/api/subject-profiles', { map }); toast(t('ok')); } catch (er) { fail(er); } } }, t('save'))))) : null;
     show(h('div', { class: 'pg-title' }, h('h1', null, t('nav_students')), h('button', { onclick: async () => { try { const r = await api('POST', '/api/sync'); toast(t('synced') + ': ' + r.students); viewStudents(); } catch (e) { fail(e); } } }, t('sync'))),
-      sp, j.users.length ? groups.map((g) => groupCard(g[0], g[1])) : panel(null, empty(t('no_students'))));
+      ME.role === 'admin' ? window.HCX.teachersPanel(teachers, () => viewStudents()) : null, sp, students.length ? groups.map((g) => groupCard(g[0], g[1])) : panel(null, empty(t('no_students'))));
   }
 
   async function viewCatalog() {
@@ -385,7 +387,7 @@
 
     const tabs = [['resumen', t('tab_resumen')], ['evolucion', t('tab_evolucion'), byType('nota').length], ['constantes', t('tab_constantes'), byType('constantes').length], ['balance', t('tab_balance'), byType('balance').length], ['cuidados', t('tab_cuidados'), byType('cuidado').length]].concat(window.HCX.extraTabs(X), [['ficha', t('tab_ficha')]]);
     const toolbar = !staff && open ? h('div', { class: 'toolbar row' }, h('b', null, t('tb_record') + ':'), ['nota', 'constantes', 'balance', 'cuidado'].map((ty) => h('button', { class: 'pri sm', onclick: () => openForm(ty) }, '+ ' + t('r_' + ty))), h('button', { class: 'sm', onclick: () => { location.hash = base + '/imprimir'; } }, t('print')))
-      : staff ? h('div', { class: 'toolbar row' }, window.HCX.dayControl(id, c.chart.day, refresh), c.members.length > 1 ? h('label', { class: 'row' }, t('filter_student') + ':', h('select', { onchange: (e) => { chartUser = e.target.value; refresh(); } }, h('option', { value: '' }, t('all_students')), c.members.map((m) => h('option', { value: m.id, selected: String(m.id) === String(chartUser) }, m.name)))) : null, h('button', { class: 'sm', onclick: () => { location.hash = base + '/imprimir'; } }, t('print'))) : null;
+      : staff ? h('div', { class: 'toolbar row' }, window.HCX.dayControl(id, c.chart.day, refresh), window.HCX.previewControl(id), c.members.length > 1 ? h('label', { class: 'row' }, t('filter_student') + ':', h('select', { onchange: (e) => { chartUser = e.target.value; refresh(); } }, h('option', { value: '' }, t('all_students')), c.members.map((m) => h('option', { value: m.id, selected: String(m.id) === String(chartUser) }, m.name)))) : null, h('button', { class: 'sm', onclick: () => { location.hash = base + '/imprimir'; } }, t('print'))) : null;
     const right = [h('span', { class: 'chip' }, c.chart.kind === 'team' ? t('team') + ': ' + c.chart.name : t('individual')), stateChip(open), c.chart.role ? h('span', { class: 'chip gry' }, t('p_' + c.chart.role)) : null];
     show(h('div', { class: 'pg-title' }, h('button', { class: 'link', onclick: () => { history.length > 1 ? history.back() : (location.hash = '#/'); } }, t('back')), h('span', { class: 'mut' }, t('members') + ': ' + c.members.map((m) => m.name).join(', '))),
       banner(c.patient, right), tabBar(tabs, tab, base), !open && !staff ? h('div', { class: 'panel warn' }, h('div', { class: 'pb' }, t('chart_closed'))) : null, toolbar, formBox, body);
@@ -418,6 +420,7 @@
       if (a === 'catalog') return await viewCatalog();
       if (a === 'audit') return await viewAudit();
       if (a === 'grades') return await window.HCX.viewGrades();
+      if (a === 'import') return await window.HCX.viewImport();
       return await viewPatients();
     } catch (e) { fail(e); if (e.status === 404) location.hash = '#/'; }
   }

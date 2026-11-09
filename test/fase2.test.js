@@ -113,13 +113,40 @@ test('notas con rúbrica: el alumno solo ve la suya y solo si está publicada', 
   assert.strictEqual((await fetch(base + '/api/grades.csv', { headers: { Cookie: enf } })).status, 403);
 });
 
-test('profesorado adicional: solo la administración lo nombra', async () => {
+test('profesorado adicional: solo la administración lo da de alta, con contraseña propia; nunca desde el alumnado', async () => {
   const ue = (await call('GET', '/api/users', null, admin)).json.users.find((u) => u.email === 'enf@x.com');
-  assert.strictEqual((await call('PUT', '/api/users/' + ue.id + '/role', { role: 'teacher' }, enf)).status, 403);
-  assert.strictEqual((await call('PUT', '/api/users/' + ue.id + '/role', { role: 'teacher' }, admin)).status, 200);
-  assert.strictEqual((await call('GET', '/api/patients', null, enf)).status, 200, 'ya es profesorado');
-  assert.strictEqual((await call('PUT', '/api/users/' + ue.id + '/role', { role: 'student' }, admin)).status, 200);
-  assert.strictEqual((await call('GET', '/api/patients', null, enf)).status, 403);
+  assert.strictEqual((await call('PUT', '/api/users/' + ue.id + '/role', { role: 'teacher' }, admin)).status, 404, 'ya no se puede ascender al alumnado');
+  const body = { name: 'Rosa Docente', email: 'rosa@centro.es', password: 'una-clave-larga-1' };
+  assert.strictEqual((await call('POST', '/api/teachers', body, enf)).status, 403);
+  assert.strictEqual((await call('POST', '/api/teachers', Object.assign({}, body, { password: 'corta' }), admin)).status, 400);
+  assert.strictEqual((await call('POST', '/api/teachers', Object.assign({}, body, { email: 'enf@x.com' }), admin)).status, 409, 'no convierte alumnado en profesorado');
+  assert.strictEqual((await call('POST', '/api/teachers', body, admin)).status, 200);
+  const bad = await fetch(base + '/api/teacher/login', { method: 'POST', headers: { 'X-Requested-With': 'historia', 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'rosa@centro.es', password: 'otra' }) }); assert.strictEqual(bad.status, 401);
+  const ok = await fetch(base + '/api/teacher/login', { method: 'POST', headers: { 'X-Requested-With': 'historia', 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'rosa@centro.es', password: 'una-clave-larga-1' }) }); assert.strictEqual(ok.status, 200);
+  const rosa = (ok.headers.get('set-cookie') || '').split(';')[0];
+  assert.strictEqual((await call('GET', '/api/patients', null, rosa)).status, 200, 'entra como profesorado');
+  assert.strictEqual((await call('POST', '/api/teachers', Object.assign({}, body, { email: 'otra@centro.es' }), rosa)).status, 403, 'solo la administración da altas');
+  const rid = (await call('GET', '/api/users', null, admin)).json.users.find((u) => u.email === 'rosa@centro.es').id;
+  assert.strictEqual((await call('DELETE', '/api/teachers/' + rid, null, admin)).status, 200);
+  assert.strictEqual((await call('GET', '/api/patients', null, rosa)).status, 401, 'la baja cierra sus sesiones');
+});
+
+test('ver como alumno: solo lectura, sin notas del docente y sin lo que aún no toca', async () => {
+  const mk = await sso({ email: 'admin@campus.local', name: 'Admin', admin: true });
+  const r = await call('POST', '/api/import/example', null, mk); assert.strictEqual(r.status, 200); assert.ok(r.json.records > 5);
+  const chart = r.json.chart_id;
+  const staffView = (await call('GET', '/api/charts/' + chart, null, mk)).json;
+  assert.ok(staffView.events.some((e) => e.day === 5), 'el profesorado ve el día 5');
+  assert.strictEqual((await call('POST', '/api/charts/' + chart + '/preview', { profile: 'enfermeria' }, mk)).status, 200);
+  const me = (await call('GET', '/api/me', null, mk)).json; assert.strictEqual(me.preview, true); assert.strictEqual(me.staff, false);
+  const v = (await call('GET', '/api/charts/' + chart, null, mk)).json;
+  assert.ok(!v.events.some((e) => e.day > 3), 'el día 5 aún no se ha liberado');
+  assert.strictEqual(v.patient.data.notas_docente, undefined, 'no ve las notas del docente');
+  assert.strictEqual((await call('GET', '/api/patients', null, mk)).status, 403, 'no ve la lista de pacientes');
+  assert.strictEqual((await call('POST', '/api/charts/' + chart + '/records', { type: 'nota', data: { texto: 'prueba' } }, mk)).status, 403, 'solo lectura');
+  assert.strictEqual((await call('POST', '/api/preview/exit', null, mk)).status, 200);
+  assert.strictEqual((await call('GET', '/api/me', null, mk)).json.staff, true, 'vuelve al profesorado');
+  assert.ok(!(await call('GET', '/api/users', null, mk)).json.users.some((u) => /historia\.local$/.test(u.email)), 'el alumno de prueba no sale en Alumnado');
 });
 
 test('enviar notas publicadas al Campus', async () => {

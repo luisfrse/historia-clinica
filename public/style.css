@@ -168,3 +168,8 @@ svg.lc .ln { fill: none; stroke-width: 2; } svg.lc .l0 { stroke: var(--acc); } s
   body { background: #fff; color: #000; } #top, .noprint, .skip, #toast { display: none !important; }
   .print-doc { max-width: none; } .pd-sec { break-inside: avoid-page; } .pd-line { break-inside: avoid; }
 }
+
+/* ---- Importar caso ---- */
+textarea.mono { font-family: ui-monospace, Consolas, 'Courier New', monospace; font-size: .85rem; line-height: 1.45; min-height: 220px; white-space: pre; }
+.imp-list { margin: 4px 0 8px; padding-left: 20px; } .imp-list li { margin: 2px 0; }
+.tb.warn { background: #fff1d6; color: #7a4d00; border-color: #e6bf6a; font-weight: 700; }
