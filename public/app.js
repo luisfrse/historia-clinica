@@ -108,7 +108,7 @@
       : d.sin_alergias ? h('span', { class: 'al none' }, t('allergies_none')) : h('span', { class: 'al unk' }, t('allergies_unk'));
     return h('div', { class: 'banner' },
       h('div', { class: 'b1' }, h('div', { class: 'bn-name' }, name(d)), f(t('f_age'), age !== '' ? age + ' ' + t('age_years') : ''), f(t('f_sexo'), d.sexo ? t('sex_' + d.sexo) : ''), f(t('b_dob'), fmtD(d.fecha_nacimiento)), f('NHC', d.nhc || p.code), f(t('b_loc'), loc)),
-      h('div', { class: 'b2' }, alEl, d.aislamiento ? h('span', { class: 'chip amb' }, t('f_aislamiento') + ': ' + d.aislamiento) : null, d.dieta ? h('span', { class: 'chip' }, t('f_dieta') + ': ' + d.dieta) : null, right ? h('span', { class: 'row' }, right) : null));
+      h('div', { class: 'b2' }, alEl, (d.aislamiento || (d.aislamiento_tipos || []).length) ? h('span', { class: 'chip ' + ((d.aislamiento_tipos || []).length ? 'red' : 'amb') }, t('f_aislamiento') + ': ' + [(d.aislamiento_tipos || []).map((k) => t('ais_' + k)).join(' + '), d.aislamiento].filter(Boolean).join(' · ')) : null, d.dieta ? h('span', { class: 'chip' }, t('f_dieta') + ': ' + d.dieta) : null, right ? h('span', { class: 'row' }, right) : null));
   }
   const tabBar = (tabs, cur, base) => h('div', { class: 'tabs', role: 'tablist' }, tabs.map(([k, label, n]) => h('button', { role: 'tab', 'aria-selected': k === cur ? 'true' : 'false', class: k === cur ? 'on' : '', onclick: () => { location.hash = base + '/' + k; } }, label, n ? h('span', { class: 'cnt' }, n) : null)));
 
@@ -150,6 +150,8 @@
       else el = h('input', { type: 'text', value: d[k] || '', required: k === 'nombre' || k === 'apellidos' });
       inputs[k] = el; return field(t('f_' + k) + (k === 'nombre' || k === 'apellidos' ? ' *' : ''), el);
     })), sk === 'sec_teacher' ? { cls: 'warn' } : null));
+    const AIS = ['contacto', 'gotas', 'aereo', 'protector'], aisBox = {}; AIS.forEach((k) => { aisBox[k] = h('input', { type: 'checkbox', checked: (d.aislamiento_tipos || []).includes(k) }); });
+    const aisCard = panel(t('ais_types'), [h('div', { class: 'row' }, AIS.map((k) => h('label', { class: 'row' }, aisBox[k], t('ais_' + k)))), h('p', { class: 'mut' }, t('ais_help'))]);
     const alList = h('div'); let alRows = [];
     const addAl = (a) => {
       const r = { agente: h('input', { type: 'text', value: a.agente || '', placeholder: t('allergy_agent') }), reaccion: h('input', { type: 'text', value: a.reaccion || '', placeholder: t('allergy_reaction') }), gravedad: h('select', null, ['', 'leve', 'moderada', 'grave'].map((v) => h('option', { value: v, selected: a.gravedad === v }, v ? t('sev_' + v) : t('allergy_sev')))) };
@@ -163,11 +165,12 @@
       onsubmit: async (e) => {
         e.preventDefault();
         const body = {}; for (const [k, el] of Object.entries(inputs)) body[k] = el.value;
+        body.aislamiento_tipos = AIS.filter((k) => aisBox[k].checked);
         body.alergias = alRows.map((r) => ({ agente: r.agente.value, reaccion: r.reaccion.value, gravedad: r.gravedad.value })).filter((a) => a.agente.trim());
         body.sin_alergias = noAl.checked;
         try { const r = existing ? await api('PUT', '/api/patients/' + existing.id, body) : await api('POST', '/api/patients', body); toast(t('ok')); location.hash = '#/patient/' + (existing ? existing.id : r.id); } catch (er) { fail(er); }
       },
-    }, h('p', { class: 'mut' }, t('fictitious')), sections[0], alCard, sections.slice(1), h('div', { class: 'row' }, h('button', { class: 'pri', type: 'submit' }, t('save')), h('button', { type: 'button', onclick: () => history.back() }, t('cancel'))));
+    }, h('p', { class: 'mut' }, t('fictitious')), sections[0], alCard, aisCard, sections.slice(1), h('div', { class: 'row' }, h('button', { class: 'pri', type: 'submit' }, t('save')), h('button', { type: 'button', onclick: () => history.back() }, t('cancel'))));
   }
 
   /* ---------- resúmenes de registros ---------- */
@@ -197,7 +200,7 @@
     const base = '#/patient/' + id;
     const actions = [h('button', { onclick: () => { location.hash = base + '/edit'; } }, t('edit')), h('button', { class: 'danger', onclick: async () => { if (patient.archived || confirm(t('confirm_archive'))) { await api('PUT', '/api/patients/' + id, { archived: !patient.archived }); viewPatient(id, tab); } } }, patient.archived ? t('restore') : t('archive'))];
     let body;
-    if (tab === 'ficha') body = [revisions ? h('p', { class: 'mut' }, revisions + ' ' + t('revisions')) : null, fichaPanels(patient, true)];
+    if (tab === 'ficha') body = [window.HCX.casePdfBar(id), revisions ? h('p', { class: 'mut' }, revisions + ' ' + t('revisions')) : null, fichaPanels(patient, true)];
     else if (tab === 'asignar') body = assignPanel(id, charts, uj, (await api('GET', '/api/patients/' + id + '/consignas')).consignas);
     else if (tab === 'historias') body = panel(null, charts.length ? h('div', { class: 'tw' }, h('table', { class: 'grid' }, h('thead', null, h('tr', null, [t('col_chart'), t('col_type'), t('col_members'), t('col_records'), t('col_last'), t('col_state'), ''].map((x, i) => h('th', { class: i === 3 ? 'r' : '' }, x)))),
       h('tbody', null, charts.map((c) => h('tr', null, h('td', null, h('a', { href: '#/chart/' + c.id }, c.name), c.brief ? h('div', { class: 'sub' }, c.brief.title + (c.brief.total ? ' · ' + c.brief.done + '/' + c.brief.total : '')) : null), h('td', null, h('span', { class: 'chip' }, c.kind === 'team' ? t('team') : t('individual'))), h('td', null, c.members.map((m) => m.name).join(', ')), h('td', { class: 'r' }, c.recs), h('td', null, c.last ? fmtISO(c.last) : '—'), h('td', null, stateChip(c.status === 'open')),

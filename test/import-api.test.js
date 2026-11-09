@@ -160,3 +160,34 @@ test('enlace directo desde el Campus: SSO con «to» lleva a la actividad', asyn
   assert.strictEqual(await go('consigna/5/../../x'), '/', 'un destino no válido se ignora');
   assert.strictEqual(await go(undefined), '/');
 });
+
+test('aislamiento: tipos en la ficha y en la importación, catálogo ampliado y PDF del caso', async () => {
+  const admin = await sso({ email: 'admin@campus.local', name: 'Admin', admin: true });
+  const alum = await sso({ email: 'e@x.com', name: 'Elena' });
+  /* ficha con tipos (los desconocidos se descartan) */
+  const p = await call('POST', '/api/patients', { nombre: 'Rosa', apellidos: 'Vidal', aislamiento: 'SARM en herida', aislamiento_tipos: ['contacto', 'gotas', 'invento'] }, admin);
+  assert.strictEqual(p.status, 200);
+  assert.deepStrictEqual((await call('GET', '/api/patients/' + p.json.id, null, admin)).json.patient.data.aislamiento_tipos, ['contacto', 'gotas']);
+  /* importar en los dos idiomas */
+  const base2 = (k, v) => '[FICHA]\nNombre: A\nApellidos: B\n' + k + ': ' + v + '\n';
+  const IMPL = require('../lib/import');
+  assert.deepStrictEqual(IMPL.parse(base2('Tipo de aislamiento', 'contacto, aérea'), '2025-01-01').patient.aislamiento_tipos, ['contacto', 'aereo']);
+  assert.deepStrictEqual(IMPL.parse('[FITXA]\nNom: A\nCognoms: B\nTipus d\'aïllament: gotes i protector\n', '2025-01-01').patient.aislamiento_tipos, ['gotas', 'protector']);
+  assert.strictEqual(IMPL.parse(base2('Tipo de aislamiento', 'ninguno'), '2025-01-01').patient.aislamiento_tipos, undefined);
+  assert.match(IMPL.TEMPLATES.ca, /Tipus d'aïllament/); assert.match(IMPL.TEMPLATES.es, /Tipo de aislamiento/);
+  /* catálogo: acciones de aislamiento disponibles para enfermería y auxiliar */
+  const cat = (await call('GET', '/api/catalog', null, admin)).json.items;
+  for (const n of ['Aislamiento de contacto: medidas (bata, guantes, material exclusivo)', 'Aislamiento aéreo: medidas (mascarilla FFP2, puerta cerrada)', 'Señalización del aislamiento en la puerta de la habitación']) {
+    const it = cat.find((c) => c.name_es === n); assert.ok(it, n); assert.strictEqual(it.roles, 'enfermeria,tcae');
+  }
+  /* PDF del caso: versión alumnado sin notas del docente y por día; completa con todo */
+  const ex = await call('POST', '/api/import/example', { lang: 'es' }, admin), pid = ex.json.id;
+  const get = async (q, ck) => { const r = await fetch(base + '/api/patients/' + pid + '/case.pdf' + q, { headers: { Cookie: ck } }); return { status: r.status, type: r.headers.get('content-type'), text: Buffer.from(await r.arrayBuffer()).toString('latin1') }; };
+  const st = await get('?lang=es&day=1', admin); assert.strictEqual(st.status, 200); assert.match(st.type, /pdf/);
+  assert.ok(st.text.startsWith('%PDF-')); assert.ok(st.text.includes('Ruiz Soto')); assert.ok(st.text.includes('Penicilina')); assert.ok(st.text.includes('Paracetamol'));
+  assert.ok(!st.text.includes('Notas para el profesorado'), 'el alumnado no recibe las notas del docente');
+  assert.ok(st.text.includes('Radiograf') && !st.text.includes('Fiebre vespertina'), 'solo pruebas y eventos hasta el día 1');
+  assert.ok(st.text.includes('Consignas') && st.text.includes('Turno de mañana'));
+  const full = await get('?lang=ca&full=1', admin); assert.ok(full.text.includes('Notes per al professorat') && full.text.includes('Preparaci'), 'la versión completa lleva notas y todos los días');
+  assert.strictEqual((await get('?lang=es', alum)).status, 403, 'el alumnado no descarga el caso');
+});

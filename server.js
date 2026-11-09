@@ -536,6 +536,17 @@ R('GET', '/api/students/:id/report.pdf', async (req, res, ctx) => {
   audit(ctx.user.email, 'informe-pdf', u.email);
   res.writeHead(200, hdrs({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="informe-' + slugName(u.name) + '.pdf"', 'Content-Length': buf.length, 'Cache-Control': 'no-store' })); res.end(buf);
 }, { staff: true });
+R('GET', '/api/patients/:id/case.pdf', async (req, res, ctx) => {
+  const p = db.get('SELECT * FROM patients WHERE id = ?', intId(ctx.params.id)); if (!p) return bad(res, 'notfound', 404);
+  const q = ctx.url.searchParams, full = q.get('full') === '1', lang = q.get('lang') === 'es' ? 'es' : 'ca', day = Math.min(60, Math.max(1, intId(q.get('day')) || 1));
+  const d = JSON.parse(p.data), data = full ? d : PAT.forStudent(d);
+  const orders = db.all('SELECT * FROM orders WHERE patient_id = ? AND active = 1 ORDER BY start_day, id', p.id).filter((o) => full || o.start_day <= day).map(orderOut);
+  const events = db.all('SELECT * FROM events WHERE patient_id = ? ORDER BY day, id', p.id).filter((e) => full || e.day <= day).map(evOut);
+  const consignas = db.all('SELECT * FROM consignas WHERE patient_id = ? ORDER BY id', p.id).map(consignaOut);
+  const buf = REP.casePdf({ code: p.code, data, orders, events, consignas, day: full ? null : day }, lang, full, todayLocal());
+  audit(ctx.user.email, 'caso-pdf', p.code + (full ? ' completo' : ' alumnado día ' + day));
+  res.writeHead(200, hdrs({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="caso-' + p.code + (full ? '-completo' : '') + '.pdf"', 'Content-Length': buf.length, 'Cache-Control': 'no-store' })); res.end(buf);
+}, { staff: true });
 R('GET', '/api/reports.zip', async (req, res, ctx) => {
   const lang = ctx.url.searchParams.get('lang') === 'es' ? 'es' : 'ca', pid = intId(ctx.url.searchParams.get('patient'));
   const users = db.all("SELECT DISTINCT u.* FROM users u JOIN records r ON r.user_id = u.id JOIN charts c ON c.id = r.chart_id WHERE u.role = 'student' AND u.email NOT LIKE ?" + (pid ? ' AND c.patient_id = ?' : '') + ' ORDER BY u.name COLLATE NOCASE', ...(pid ? ['%@historia.local', pid] : ['%@historia.local']));
