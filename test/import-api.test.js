@@ -47,7 +47,7 @@ test('importar caso: vista previa, creación y permisos', async () => {
   const alum = await sso({ email: 'a@x.com', name: 'Alumna' });
   assert.strictEqual((await call('POST', '/api/import', { text: TEXT }, alum)).status, 403);
   assert.strictEqual((await call('GET', '/api/import/template', null, alum)).status, 403);
-  const tpl = await call('GET', '/api/import/template', null, admin); assert.strictEqual(tpl.status, 200); assert.match(tpl.json.template, /\[PRESCRIPCIONES\]/);
+  const tpl = await call('GET', '/api/import/template', null, admin); assert.strictEqual(tpl.status, 200); assert.match(tpl.json.template, /\[PRESCRIPCIONS\]/, 'por defecto en catalán'); assert.match(tpl.json.templates.es, /\[PRESCRIPCIONES\]/);
 
   const pre = await call('POST', '/api/import', { text: TEXT }, admin);
   assert.strictEqual(pre.status, 200); assert.strictEqual(pre.json.can_commit, true);
