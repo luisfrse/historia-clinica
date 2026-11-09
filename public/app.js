@@ -181,16 +181,23 @@
   async function viewStudents() {
     const j = await api('GET', '/api/users');
     const map = Object.assign({}, j.subject_profiles);
-    const rows = j.users.map((u) => h('tr', null, h('td', null, u.name, h('div', { class: 'mut' }, u.email)),
+    const row = (u) => h('tr', null, h('td', null, u.name, h('div', { class: 'mut' }, u.email)),
       h('td', null, h('select', { 'aria-label': t('role_prof'), onchange: async (e) => { try { await api('PUT', '/api/users/' + u.id, { profile: e.target.value }); toast(t('ok')); } catch (er) { fail(er); } } },
         h('option', { value: 'auto', selected: !u.profile_manual }, t('p_auto') + ' → ' + t('p_' + u.profile)), h('option', { value: 'enfermeria', selected: !!u.profile_manual && u.profile === 'enfermeria' }, t('p_enfermeria')), h('option', { value: 'tcae', selected: !!u.profile_manual && u.profile === 'tcae' }, t('p_tcae')))),
       h('td', null, u.last_login ? fmtISO(u.last_login) : '—'),
-      h('td', null, h('label', null, h('input', { type: 'checkbox', checked: !!u.active, onchange: async (e) => { try { await api('PUT', '/api/users/' + u.id, { active: e.target.checked }); } catch (er) { fail(er); } } }), ' ' + t('active')))));
+      h('td', null, h('label', null, h('input', { type: 'checkbox', checked: !!u.active, onchange: async (e) => { try { await api('PUT', '/api/users/' + u.id, { active: e.target.checked }); } catch (er) { fail(er); } } }), ' ' + t('active'))));
+    /* Alumnado agrupado por asignatura del Campus (un alumno aparece en cada asignatura en la que está matriculado). */
+    const groupCard = (title, list) => h('details', { class: 'card', open: true }, h('summary', null, h('b', null, title), ' ', h('span', { class: 'tag' }, list.length)),
+      h('table', null, h('thead', null, h('tr', null, h('th', null, t('nav_students')), h('th', null, t('role_prof')), h('th', null, t('last_login')), h('th', null, ''))), h('tbody', null, list.map(row))));
+    const known = new Set(j.subjects.map((s) => s.slug));
+    const groups = j.subjects.map((s) => [s.title, j.users.filter((u) => u.subjects.includes(s.slug))]).filter((g) => g[1].length);
+    const none = j.users.filter((u) => !u.subjects.some((x) => known.has(x)));
+    if (none.length) groups.push([t('no_subject'), none]);
     const sp = j.subjects.length ? h('div', { class: 'card' }, h('h3', null, t('subj_profiles')), h('p', { class: 'mut' }, t('subj_profiles_help')),
       j.subjects.map((s) => h('div', { class: 'row' }, h('span', null, s.title), h('select', { onchange: (e) => { if (e.target.value) map[s.slug] = e.target.value; else delete map[s.slug]; } }, h('option', { value: '' }, '—'), h('option', { value: 'enfermeria', selected: map[s.slug] === 'enfermeria' }, t('p_enfermeria')), h('option', { value: 'tcae', selected: map[s.slug] === 'tcae' }, t('p_tcae'))))),
       h('p', null, h('button', { onclick: async () => { try { await api('PUT', '/api/subject-profiles', { map }); toast(t('ok')); } catch (er) { fail(er); } } }, t('save')))) : null;
     show(h('div', { class: 'row sp' }, h('h1', null, t('nav_students')), h('button', { onclick: async () => { try { const r = await api('POST', '/api/sync'); toast(t('synced') + ': ' + r.students); viewStudents(); } catch (e) { fail(e); } } }, t('sync'))),
-      sp, j.users.length ? h('div', { class: 'card' }, h('table', null, h('thead', null, h('tr', null, h('th', null, t('nav_students')), h('th', null, t('role_prof')), h('th', null, t('last_login')), h('th', null, ''))), h('tbody', null, rows))) : h('p', { class: 'card' }, t('no_students')));
+      sp, j.users.length ? groups.map((g) => groupCard(g[0], g[1])) : h('p', { class: 'card' }, t('no_students')));
   }
 
   async function viewCatalog() {
