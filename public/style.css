@@ -228,3 +228,15 @@ svg.bc .net { font-weight: 700; } svg.bc .net.neg { fill: #a12; }
 .ev-b { margin-top: 4px; white-space: pre-wrap; max-width: 90ch; }
 /* ritmo por días */
 .daybar .pb { gap: 12px; } .daybar { border-left: 4px solid var(--lilac); }
+/* plan de cuidados guiado (PAI) */
+.pai-pes { font-size: 1.02rem; margin-bottom: 6px; } .pai-h { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 12px 0 4px; }
+.pai-t { max-width: 760px; } .pai-ul { margin: 2px 0 6px; padding-left: 22px; } .pai-evs { margin-top: 10px; border-top: 1px dotted var(--line); padding-top: 6px; }
+.sb { display: inline-block; min-width: 1.6em; text-align: center; padding: 1px 6px; border-radius: 6px; background: var(--acc-soft); font-weight: 700; } .sb.meta { background: #e3f4e8; color: #17592b; } .sb.ok { background: #cbeed6; color: #17592b; } .sb.mid { background: #fff1d6; color: #7a4d00; } .sb.bad { background: #fde2e0; color: #a12; }
+.wz-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; } .wz-step { border-radius: 999px; padding: 4px 12px; font-size: .9rem; } .wz-step.on { background: var(--acc); color: #fff; } .wz-step.done { border-color: #8fcba0; color: #17592b; }
+.wz-tip { background: var(--acc-soft); border-left: 4px solid var(--lilac); border-radius: var(--rs); padding: 6px 12px; margin-bottom: 10px; max-width: 90ch; } .wz-tip summary { cursor: pointer; font-weight: 700; } .wz-ex { color: var(--mut); margin: 4px 0 0; }
+.wz-card { border: 1px solid var(--line); border-radius: var(--r); padding: 8px 12px; margin: 8px 0; background: var(--panel); } .wz-chips { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 6px 0; }
+.wz-res { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; } .wz-hit { text-align: left; display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; max-width: 760px; } .wz-hit .sub { font-weight: 400; }
+.wz-ind { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 3px 0; } .grow { flex: 1 1 260px; }
+.wz-pes { margin: 10px 0; padding: 8px 12px; border-left: 4px solid var(--acc); background: var(--panel); border-radius: var(--rs); max-width: 90ch; }
+.wz-check { list-style: none; padding: 0; margin: 6px 0 10px; } .wz-check .ok { color: #17592b; } .wz-check .bad { color: #a12; }
+.wz-err { margin-top: 8px; color: #a12; } .wz-err ul { margin: 2px 0 0; padding-left: 20px; } .wz-nav { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }

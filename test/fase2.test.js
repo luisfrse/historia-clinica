@@ -91,7 +91,12 @@ test('escalas, valoración, plan de cuidados e informe: solo enfermería', async
   assert.strictEqual(plan.status, 200);
   assert.strictEqual((await post(cEnf, enf, 'plan_eval', { plan_id: plan.json.id, resultado: 'conseguido', texto: 'Sin caídas' })).status, 200);
   assert.strictEqual((await post(cEnf, enf, 'plan_eval', { plan_id: 99999, resultado: 'conseguido' })).status, 400);
-  assert.strictEqual((await post(cAux, aux, 'plan', { problema: 'abc', objetivo: 'abc', intervenciones: 'abc' })).status, 400);
+  /* el plan de cuidados (PAI) también lo hace el auxiliar; valoración, escalas e informe siguen siendo de enfermería */
+  const planAux = await post(cAux, aux, 'plan', { problema: 'Riesgo de caídas', causa: 'Debilidad', objetivo: 'No sufrirá caídas', intervenciones: 'Cama baja y timbre al alcance' }); assert.strictEqual(planAux.status, 200);
+  assert.strictEqual((await post(cAux, aux, 'plan_eval', { plan_id: planAux.json.id, resultado: 'parcial' })).status, 200);
+  assert.strictEqual((await post(cAux, aux, 'valoracion', { patron: 'actividad', texto: 'Una valoración' })).status, 400, 'el auxiliar no hace la valoración por patrones');
+  assert.strictEqual((await post(cAux, aux, 'informe', { tipo: 'alta', resumen: 'Un resumen largo del alta' })).status, 400);
+  assert.strictEqual((await post(cAux, aux, 'plan', { problema: 'ab', objetivo: 'ab', intervenciones: 'ab' })).status, 400, 'textos demasiado cortos');
   assert.strictEqual((await post(cEnf, enf, 'informe', { tipo: 'alta', resumen: 'Paciente estable, alta a domicilio con pautas.' })).status, 200);
 });
 

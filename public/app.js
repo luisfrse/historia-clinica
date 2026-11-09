@@ -79,7 +79,7 @@
     add(top, h('span', { class: 'brand' }, h('img', { src: '/favicon-32.png', alt: '' }), h('span', { class: 'bt' }, t('app'))));
     if (ME) {
       const seg = location.hash.replace(/^#\/?/, '').split('/')[0];
-      const cur = seg === 'students' || seg === 'catalog' || seg === 'audit' || seg === 'grades' || seg === 'help' ? seg : 'home';
+      const cur = seg === 'students' || seg === 'catalog' || seg === 'taxonomy' || seg === 'audit' || seg === 'grades' || seg === 'help' ? seg : 'home';
       const items = ME.staff ? [['home', '#/', 'nav_patients'], ['students', '#/students', 'nav_students'], ['catalog', '#/catalog', 'nav_catalog'], ['grades', '#/grades', 'nav_grades'], ['audit', '#/audit', 'nav_audit'], ['help', '#/help', 'nav_help']] : [['home', '#/', 'nav_mine'], ['help', '#/help', 'nav_help']];
       add(top, h('nav', { 'aria-label': 'Principal' }, items.map(([k, href, l]) => h('button', { class: cur === k ? 'on' : '', onclick: () => { location.hash = href; } }, t(l)))));
       add(top, h('span', { class: 'who' }, ME.name));
@@ -272,7 +272,7 @@
       h('div', { class: 'row' }, h('label', { class: 'row' }, re, t('p_enfermeria')), h('label', { class: 'row' }, rt, t('p_tcae'))),
       h('p', null, h('button', { class: 'pri', onclick: async () => { try { await api('POST', '/api/catalog', { name_es: nes.value, name_ca: nca.value, grp: grp.value, roles: [re.checked ? 'enfermeria' : '', rt.checked ? 'tcae' : ''].filter(Boolean) }); viewCatalog(); } catch (e) { fail(e); } } }, t('c_add')))));
     const groups = [...new Set(items.map((i) => i.grp))];
-    show(h('h1', null, t('nav_catalog')), h('p', { class: 'mut' }, t('catalog_help')), add1, groups.map((g) => h('details', { class: 'panel', open: true }, h('summary', null, h('span', null, g || '—', ' ', h('span', { class: 'chip' }, items.filter((i) => i.grp === g).length))),
+    show(h('div', { class: 'pg-title' }, h('h1', null, t('nav_catalog')), h('button', { onclick: () => { location.hash = '#/taxonomy'; } }, t('tx_open'))), h('p', { class: 'mut' }, t('catalog_help')), add1, groups.map((g) => h('details', { class: 'panel', open: true }, h('summary', null, h('span', null, g || '—', ' ', h('span', { class: 'chip' }, items.filter((i) => i.grp === g).length))),
       h('div', { class: 'tw' }, h('table', { class: 'grid' }, h('tbody', null, items.filter((i) => i.grp === g).map((i) => h('tr', null,
         h('td', null, LANG === 'ca' && i.name_ca ? i.name_ca : i.name_es, i.active ? '' : h('span', { class: 'chip amb' }, 'off')),
         h('td', null, h('div', { class: 'row' }, ['enfermeria', 'tcae'].map((r) => h('label', { class: 'row' }, h('input', { type: 'checkbox', checked: i.roles.split(',').includes(r), onchange: async (e) => { const cur = new Set(i.roles.split(',')); e.target.checked ? cur.add(r) : cur.delete(r); i.roles = [...cur].join(','); try { await api('PUT', '/api/catalog/' + i.id, { roles: [...cur] }); } catch (er) { fail(er); } } }), t('p_' + r))))),
@@ -428,6 +428,7 @@
       if (a === 'students') return await viewStudents();
       if (a === 'student' && b) return await window.HCX.viewStudent(parseInt(b, 10));
       if (a === 'catalog') return await viewCatalog();
+      if (a === 'taxonomy') return await window.HCX.viewTaxonomy();
       if (a === 'audit') return await viewAudit();
       if (a === 'grades') return await window.HCX.viewGrades();
       if (a === 'import') return await window.HCX.viewImport();

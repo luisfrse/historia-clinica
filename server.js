@@ -21,6 +21,7 @@ const TTL = 10 * 3600e3;
 
 const db = open(DATA_DIR);
 CAT.seedCatalog(db);
+const TAX = require('./lib/taxonomy'); TAX.seedTaxonomy(db);
 
 /* ---------- utilidades HTTP ---------- */
 const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
@@ -611,6 +612,52 @@ R('GET', '/api/reports.zip', async (req, res, ctx) => {
   const used = new Set(), files = users.map((u) => { let n = slugName(u.name), k = n, i = 2; while (used.has(k)) k = n + '_' + i++; used.add(k); return { name: k + '.pdf', data: REP.studentPdf(studentModel(u), lang, todayLocal()) }; });
   const buf = REP.zipStore(files); audit(ctx.user.email, 'informes-zip', files.length + ' alumnos');
   res.writeHead(200, hdrs({ 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="informes-alumnado.zip"', 'Content-Length': buf.length, 'Cache-Control': 'no-store' })); res.end(buf);
+}, { staff: true });
+
+/* --- biblioteca NANDA · NOC · NIC (guía del plan de cuidados): la leen todos, la edita el profesorado --- */
+const taxSlugs = () => ({ noc: new Set(db.all("SELECT slug FROM taxonomy WHERE kind = 'noc'").map((r) => r.slug)), nic: new Set(db.all("SELECT slug FROM taxonomy WHERE kind = 'nic'").map((r) => r.slug)) });
+R('GET', '/api/taxonomy', async (req, res, ctx) => {
+  const all = isStaff(ctx.user) && ctx.url.searchParams.get('all') === '1';
+  json(res, 200, { items: db.all('SELECT * FROM taxonomy' + (all ? '' : ' WHERE active = 1') + ' ORDER BY kind, ord, id').map(TAX.out) });
+});
+R('POST', '/api/taxonomy', async (req, res, ctx) => {
+  const b = await readJson(req, 3e4), kind = b.kind; if (!TAX.KINDS.includes(kind)) return bad(res, 'kind');
+  const f = TAX.fields(kind, b, taxSlugs()); if (f.error) return bad(res, f.error); const v = f.v;
+  const slug = 'c-' + kind + '-' + crypto.randomBytes(4).toString('hex'), ord = db.get('SELECT COALESCE(MAX(ord),0)+1 n FROM taxonomy').n;
+  const r = db.run('INSERT INTO taxonomy (kind, slug, code, es, ca, hint_es, hint_ca, items_es, items_ca, links, tipo, who, custom, ord, created) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)', kind, slug, v.code, v.es, v.ca, v.hint_es, v.hint_ca, JSON.stringify(v.items_es), JSON.stringify(v.items_ca), JSON.stringify(v.links), v.tipo, v.who, ord, new Date().toISOString());
+  audit(ctx.user.email, 'taxonomia-alta', kind + ' ' + v.es); json(res, 200, { id: Number(r.lastInsertRowid), slug });
+}, { staff: true });
+R('PUT', '/api/taxonomy/:id', async (req, res, ctx) => {
+  const e = db.get('SELECT * FROM taxonomy WHERE id = ?', intId(ctx.params.id)); if (!e) return bad(res, 'notfound', 404);
+  const b = await readJson(req, 3e4);
+  if (b.active != null && Object.keys(b).length === 1) { db.run('UPDATE taxonomy SET active = ? WHERE id = ?', b.active ? 1 : 0, e.id); return json(res, 200, { ok: true }); }
+  const f = TAX.fields(e.kind, b, taxSlugs()); if (f.error) return bad(res, f.error); const v = f.v;
+  db.run('UPDATE taxonomy SET code=?, es=?, ca=?, hint_es=?, hint_ca=?, items_es=?, items_ca=?, links=?, tipo=?, who=? WHERE id=?', v.code, v.es, v.ca, v.hint_es, v.hint_ca, JSON.stringify(v.items_es), JSON.stringify(v.items_ca), JSON.stringify(v.links), v.tipo, v.who, e.id);
+  audit(ctx.user.email, 'taxonomia-edicion', e.kind + ' ' + v.es); json(res, 200, { ok: true });
+}, { staff: true });
+R('DELETE', '/api/taxonomy/:id', async (req, res, ctx) => {
+  const e = db.get('SELECT * FROM taxonomy WHERE id = ?', intId(ctx.params.id)); if (!e) return bad(res, 'notfound', 404);
+  db.run('DELETE FROM taxonomy WHERE id = ?', e.id); audit(ctx.user.email, 'taxonomia-baja', e.kind + ' ' + e.es); json(res, 200, { ok: true });
+}, { staff: true });
+const KIND_ALIAS = { nanda: 'nanda', dx: 'nanda', diagnostico: 'nanda', diagnóstico: 'nanda', diagnostic: 'nanda', diagnòstic: 'nanda', noc: 'noc', resultado: 'noc', resultat: 'noc', nic: 'nic', intervencion: 'nic', intervención: 'nic', intervencio: 'nic', intervenció: 'nic' };
+R('POST', '/api/taxonomy/import', async (req, res, ctx) => {
+  const b = await readJson(req, 6e5), lines = String(b.text || '').split(/\r?\n/).filter((l) => l.trim()); if (!lines.length) return bad(res, 'Pega el contenido del CSV.');
+  const out = { created: 0, updated: 0, errors: [] }, now = new Date().toISOString(); let ord = db.get('SELECT COALESCE(MAX(ord),0) n FROM taxonomy').n;
+  db.tx(() => lines.forEach((ln, idx) => {
+    const c = TAX.parseCsvLine(ln); if (idx === 0 && /^tipo$|^kind$/i.test(c[0])) return;
+    const kind = KIND_ALIAS[String(c[0] || '').toLowerCase()]; if (!kind) { out.errors.push({ line: idx + 1, msg: 'Tipo no válido «' + (c[0] || '') + '» (nanda, noc o nic).' }); return; }
+    const code = TAX.list([c[1]], 1, 20)[0] || '', es = TAX.list([c[2]], 1, 200)[0]; if (!es) { out.errors.push({ line: idx + 1, msg: 'Falta la etiqueta.' }); return; }
+    const ca = TAX.list([c[3]], 1, 200)[0] || es, el = String(c[4] || '').split('|').map((x) => x.trim()).filter(Boolean).slice(0, 15), mp = String(c[5] || '').split('|').map((x) => x.trim()).filter(Boolean).slice(0, 15);
+    const keys = TAX.itemsKey(kind), items = kind === 'nanda' ? { rc: el, mp } : { [keys[0]]: el };
+    const ex = (code && db.get('SELECT * FROM taxonomy WHERE kind = ? AND code = ?', kind, code)) || db.get('SELECT * FROM taxonomy WHERE kind = ? AND LOWER(es) = LOWER(?) AND (code = ? OR code = ?) ORDER BY (code = ?) DESC', kind, es, code, '', code);
+    if (ex) { const oldE = JSON.parse(ex.items_es || '{}'), has = Object.values(items).some((a) => a.length); db.run('UPDATE taxonomy SET code = ?, es = ?, ca = ?, items_es = ?, items_ca = ? WHERE id = ?', code || ex.code, es, ca, JSON.stringify(has ? items : oldE), JSON.stringify(has ? items : JSON.parse(ex.items_ca || '{}')), ex.id); out.updated++; }
+    else { db.run('INSERT INTO taxonomy (kind, slug, code, es, ca, items_es, items_ca, links, tipo, who, custom, ord, created) VALUES (?,?,?,?,?,?,?,?,?,?,1,?,?)', kind, 'c-' + kind + '-' + crypto.randomBytes(4).toString('hex'), code, es, ca, JSON.stringify(items), JSON.stringify(items), '{}', kind === 'nanda' ? 'real' : '', kind === 'nic' ? 'both' : '', ++ord, now); out.created++; }
+  }));
+  audit(ctx.user.email, 'taxonomia-importar', out.created + ' nuevas, ' + out.updated + ' actualizadas'); json(res, 200, out);
+}, { staff: true });
+R('GET', '/api/taxonomy.csv', async (req, res) => {
+  const rows = db.all('SELECT * FROM taxonomy ORDER BY kind, ord, id').map((r) => { const ie = JSON.parse(r.items_es || '{}'); return [r.kind, r.code, r.es, r.ca, (r.kind === 'nanda' ? ie.rc : r.kind === 'noc' ? ie.ind : ie.act || []).join(' | '), r.kind === 'nanda' ? (ie.mp || []).join(' | ') : ''].map(TAX.csvCell).join(';'); });
+  res.writeHead(200, hdrs({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="biblioteca-nanda-noc-nic.csv"', 'Cache-Control': 'no-store' })); res.end('\ufeff' + ['tipo;codigo;es;ca;elementos;elementos_mp'].concat(rows).join('\r\n'));
 }, { staff: true });
 
 /* --- eliminar un caso completo (paciente y todo lo que cuelga de él) --- */

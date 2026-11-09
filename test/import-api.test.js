@@ -311,3 +311,58 @@ test('eliminar un caso completo: con confirmación, solo profesorado y sin dejar
   assert.strictEqual(db.get('SELECT COUNT(*) n FROM records WHERE chart_id = ?', cid).n, 0); assert.strictEqual(db.get('SELECT COUNT(*) n FROM grades WHERE chart_id = ?', cid).n, 0);
   assert.strictEqual((await call('POST', '/api/patients/' + pid + '/delete', { confirm: 'BORRAR' }, admin)).status, 404, 'ya no existe');
 });
+
+test('PAI guiado con biblioteca NANDA·NOC·NIC: lo hacen enfermería y auxiliar; la biblioteca la edita el profesorado', async () => {
+  const admin = await sso({ email: 'admin@campus.local', name: 'Admin', admin: true });
+  const aux = await sso({ email: 'k@x.com', name: 'Kira' });
+  const ex = await call('POST', '/api/import/example', { lang: 'es' }, admin), pid = ex.json.id;
+  const ua = (await call('GET', '/api/users', null, admin)).json.users.find((u) => u.email === 'k@x.com');
+  await call('PUT', '/api/users/' + ua.id, { profile: 'tcae' }, admin);
+  await call('POST', '/api/patients/' + pid + '/assign', { mode: 'individual', user_ids: [ua.id] }, admin);
+  const cid = (await call('GET', '/api/my/charts', null, aux)).json.charts.find((c) => c.name === 'Kira').id;
+  /* biblioteca: la leen todos; solo el profesorado la edita */
+  const lib = (await call('GET', '/api/taxonomy', null, aux)).json.items;
+  assert.ok(lib.filter((e) => e.kind === 'nanda').length >= 20 && lib.filter((e) => e.kind === 'noc').length >= 20 && lib.filter((e) => e.kind === 'nic').length >= 30, 'biblioteca inicial');
+  const dx = lib.find((e) => e.slug === 'dx-limpieza-vias'); assert.strictEqual(dx.ca, 'Neteja ineficaç de les vies aèries'); assert.ok(dx.links.noc.includes('noc-permeabilidad-vias')); assert.ok(dx.items_es.rc.length >= 3 && dx.items_ca.mp.length >= 3);
+  for (const e of lib) for (const sl of [].concat((e.links || {}).noc || [], (e.links || {}).nic || [])) assert.ok(lib.some((x) => x.slug === sl), 'enlace roto ' + e.slug + ' → ' + sl);
+  assert.strictEqual((await call('POST', '/api/taxonomy', { kind: 'noc', es: 'Prueba' }, aux)).status, 403);
+  /* el auxiliar hace un PAI completo */
+  const plan = { patron: 'actividad', datos: 'Disnea al caminar 5 metros y SpO2 89 % al esfuerzo.', tipo: 'real', nanda: { slug: dx.slug, code: '', es: dx.es, ca: dx.ca }, problema: dx.es, causa: 'secreciones bronquiales abundantes', signos: 'tos con expectoración, ruidos añadidos', prioridad: 'alta',
+    noc: [{ slug: 'noc-permeabilidad-vias', es: 'Estado respiratorio: permeabilidad de las vías respiratorias', ca: 'Estat respiratori: permeabilitat de les vies respiratòries', plazo: 7, ind: [{ t: 'capacidad de eliminar secreciones', ini: 2, meta: 4 }, { t: 'frecuencia respiratoria', ini: 2, meta: 4 }] }],
+    nic: [{ slug: 'nic-manejo-vias-aereas', es: 'Manejo de las vías aéreas', ca: 'Maneig de les vies aèries', quien: 'both', freq: 'cada 4 h', act: ['colocar a la persona semisentada', 'vigilar los ruidos respiratorios'] }] };
+  const post = (data, type) => call('POST', '/api/charts/' + cid + '/records', { type: type || 'plan', data }, aux);
+  const ok = await post(plan); assert.strictEqual(ok.status, 200);
+  const saved = (await call('GET', '/api/charts/' + cid, null, aux)).json.records.find((r) => r.id === ok.json.id).data;
+  assert.strictEqual(saved.noc[0].ind[1].meta, 4); assert.strictEqual(saved.nic[0].act.length, 2); assert.match(saved.objetivo, /capacidad de eliminar secreciones 2→4/, 'se genera el texto clásico para listados y PDF'); assert.match(saved.intervenciones, /semisentada/);
+  /* validaciones: meta mayor que el inicio, indicador y actividad obligatorios, puntuaciones de 1 a 5 */
+  const bad = (patch) => post(Object.assign({}, plan, patch));
+  assert.strictEqual((await bad({ noc: [Object.assign({}, plan.noc[0], { ind: [{ t: 'x', ini: 4, meta: 4 }] })] })).status, 400, 'meta ≤ inicio');
+  assert.strictEqual((await bad({ noc: [Object.assign({}, plan.noc[0], { ind: [{ t: 'x', ini: 0, meta: 9 }] })] })).status, 400, 'fuera de 1-5');
+  assert.strictEqual((await bad({ noc: [Object.assign({}, plan.noc[0], { ind: [] })] })).status, 400, 'sin indicadores');
+  assert.strictEqual((await bad({ nic: [Object.assign({}, plan.nic[0], { act: [] })] })).status, 400, 'sin actividades');
+  assert.strictEqual((await bad({ patron: 'inventado' })).status, 400); assert.strictEqual((await bad({ nic: [Object.assign({}, plan.nic[0], { quien: 'jefe' })] })).status, 400);
+  /* evaluación con puntuaciones por indicador */
+  const ev = await post({ plan_id: ok.json.id, resultado: 'parcial', texto: 'Mejora, pero aún expectora poco', ind: [{ n: 0, i: 0, valor: 3 }, { n: 0, i: 1, valor: 4 }] }, 'plan_eval'); assert.strictEqual(ev.status, 200);
+  assert.strictEqual((await post({ plan_id: ok.json.id, resultado: 'parcial', ind: [{ n: 0, i: 0, valor: 7 }] }, 'plan_eval')).status, 400, 'puntuación fuera de rango');
+  const evs = (await call('GET', '/api/charts/' + cid, null, aux)).json.records.find((r) => r.id === ev.json.id).data; assert.deepStrictEqual(evs.ind.map((x) => x.valor), [3, 4]);
+  /* el plan antiguo (sin estructura) sigue valiendo */
+  assert.strictEqual((await post({ problema: 'Riesgo de caídas', causa: 'Debilidad', objetivo: 'No sufrirá caídas', intervenciones: 'Cama baja y timbre' })).status, 200);
+  /* el profesorado amplía la biblioteca: alta, edición, desactivar, borrar */
+  const nuevo = await call('POST', '/api/taxonomy', { kind: 'nanda', es: 'Diagnóstico de prueba', ca: 'Diagnòstic de prova', code: '99999', tipo: 'riesgo', hint_es: 'Pista', items_es: { rc: ['uno', 'dos'], mp: [] }, links: { noc: ['noc-sueno', 'inventado'], nic: ['nic-mejora-sueno'] } }, admin); assert.strictEqual(nuevo.status, 200);
+  let e1 = (await call('GET', '/api/taxonomy?all=1', null, admin)).json.items.find((e) => e.id === nuevo.json.id);
+  assert.deepStrictEqual(e1.links.noc, ['noc-sueno'], 'los enlaces a entradas que no existen se descartan'); assert.strictEqual(e1.tipo, 'riesgo'); assert.strictEqual(e1.custom, true); assert.deepStrictEqual(e1.items_ca.rc, ['uno', 'dos'], 'sin catalán, copia el castellano');
+  assert.strictEqual((await call('PUT', '/api/taxonomy/' + nuevo.json.id, { active: false }, admin)).status, 200);
+  assert.ok(!(await call('GET', '/api/taxonomy', null, aux)).json.items.some((e) => e.id === nuevo.json.id), 'desactivada: el alumnado no la ve');
+  assert.ok((await call('GET', '/api/taxonomy?all=1', null, admin)).json.items.some((e) => e.id === nuevo.json.id), 'pero el profesorado sí');
+  assert.strictEqual((await call('DELETE', '/api/taxonomy/' + nuevo.json.id, null, admin)).status, 200);
+  /* importar y exportar CSV propio */
+  const csv = 'tipo;codigo;es;ca;elementos;elementos_mp\nnanda;00155;Riesgo de caídas;Risc de caigudes;debilidad | mareo;\nnoc;1909;Conducta de prevención de caídas;;usa ayudas | pide ayuda\ncosa;1;x;;;\nnic;6490;Prevención de caídas;Prevenció de caigudes;cama baja | timbre\nnanda;;Dx nuevo del centro;Dx nou del centre;factor A;signo B';
+  const imp = (await call('POST', '/api/taxonomy/import', { text: csv }, admin)).json; assert.strictEqual(imp.updated, 3, 'se actualiza por código o por etiqueta'); assert.strictEqual(imp.created, 1); assert.strictEqual(imp.errors.length, 1);
+  const after = (await call('GET', '/api/taxonomy', null, admin)).json.items; assert.strictEqual(after.find((e) => e.code === '00155').slug, 'dx-riesgo-caidas', 'conserva sus enlaces y su pista'); assert.ok(after.find((e) => e.slug === 'dx-riesgo-caidas').hint_es.length > 20);
+  assert.deepStrictEqual(after.find((e) => e.es === 'Dx nuevo del centre'.replace('centre', 'centro') ).items_es.mp, ['signo B']);
+  const exp = await fetch(base + '/api/taxonomy.csv', { headers: { Cookie: admin } }); assert.strictEqual(exp.status, 200); const txt = await exp.text(); assert.match(txt, /tipo;codigo;es;ca;elementos;elementos_mp/); assert.match(txt, /nanda;00155;Riesgo de caídas;Risc de caigudes/);
+  assert.strictEqual((await fetch(base + '/api/taxonomy.csv', { headers: { Cookie: aux } })).status, 403);
+  /* el PDF del alumno lleva el PAI estructurado */
+  const pdf = await fetch(base + '/api/students/' + ua.id + '/report.pdf?lang=es', { headers: { Cookie: admin } }); const pt = Buffer.from(await pdf.arrayBuffer()).toString('latin1');
+  assert.ok(pt.includes('r/c secreciones bronquiales') && pt.includes('NOC: Estado respiratorio') && pt.includes('NIC: Manejo de las v'), 'diagnóstico PES, NOC y NIC en el PDF');
+});

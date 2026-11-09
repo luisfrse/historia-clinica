@@ -126,12 +126,14 @@
       return shell('valoracion', X, [h('div', { class: 'cols' }, field(t('tab_valoracion'), pat)), field(t('pat_text'), txt), h('label', { class: 'row' }, alt, t('pat_altered'))], () => ({ patron: pat.value, alterado: alt.checked, texto: txt.value }), done);
     },
     plan(X, done) {
+      if (window.HCX.paiWizardAsync) return window.HCX.paiWizardAsync(X, done);
       const dl = h('datalist', { id: 'dx-sug' }, ['Riesgo de caídas', 'Riesgo de úlcera por presión', 'Riesgo de infección', 'Dolor agudo', 'Intolerancia a la actividad', 'Déficit de autocuidado: higiene', 'Déficit de autocuidado: alimentación', 'Déficit de autocuidado: uso del retrete', 'Estreñimiento', 'Diarrea', 'Patrón respiratorio ineficaz', 'Hipertermia', 'Ansiedad', 'Alteración del patrón del sueño', 'Conocimientos deficientes sobre el régimen terapéutico', 'Deterioro de la integridad cutánea', 'Retención urinaria', 'Riesgo de deshidratación', 'Desequilibrio nutricional por defecto', 'Aislamiento social'].map((x) => h('option', { value: x })));
       const prob = h('input', { type: 'text', list: 'dx-sug', required: true }), cause = h('input', { type: 'text' }), goal = h('textarea', { required: true }), iv = h('textarea', { required: true }), pr = sel([['alta', t('pl_high')], ['media', t('pl_mid')], ['baja', t('pl_low')]], 'media');
       return shell('plan', X, [dl, h('p', { class: 'mut' }, t('pl_hint')), h('div', { class: 'cols' }, field(t('pl_problem'), prob), field(t('pl_cause'), cause), field(t('pl_prio'), pr)), field(t('pl_goal'), goal), field(t('pl_interv'), iv)],
         () => ({ problema: prob.value, causa: cause.value, objetivo: goal.value, intervenciones: iv.value, prioridad: pr.value }), done);
     },
     plan_eval(X, done) {
+      if (window.HCX.paiEval) return window.HCX.paiEval(X, done);
       const pf = X.prefill || {}, res = sel(['conseguido', 'parcial', 'no_conseguido'].map((v) => [v, t('pl_' + v)]), 'conseguido'), txt = h('textarea');
       return shell('plan_eval', X, [h('p', { class: 'mut' }, pf.title || ''), field(t('pl_result'), res), field(t('pl_ev_text'), txt)], () => ({ plan_id: pf.plan_id, resultado: res.value, texto: txt.value }), done);
     },
@@ -198,6 +200,7 @@
   }
 
   function tabPlan(X) {
+    if (window.HCX.paiTab) return window.HCX.paiTab(X);
     const plans = X.byType('plan'), evs = live(X, 'plan_eval');
     const cards = plans.map((p) => {
       const mine = evs.filter((e) => e.data.plan_id === p.id), last = mine[0];
@@ -635,5 +638,5 @@
       h('div', { class: 'cols' }, nm, em, pw), h('p', null, h('button', { class: 'pri', onclick: async () => { try { await api('POST', '/api/teachers', { name: nm.value, email: em.value, password: pw.value }); toast(t('t_added')); refresh(); } catch (e) { fail(e); } } }, t('t_add')))));
   }
 
-  window.HCX = { deletePatientPanel, dayBar, paceControl, balanceChart, viewImport, viewPatients, classifyPanel, casePdfBar, viewStudent, dataPanel, windowControl, consignaCard, consignaControl, previewControl, teachersPanel, forms, summary, extraTabs, chartTab, vitalCharts, balanceShifts, patientTab, printView, viewGrades, dayControl };
+  window.HCX = { shell, deletePatientPanel, dayBar, paceControl, balanceChart, viewImport, viewPatients, classifyPanel, casePdfBar, viewStudent, dataPanel, windowControl, consignaCard, consignaControl, previewControl, teachersPanel, forms, summary, extraTabs, chartTab, vitalCharts, balanceShifts, patientTab, printView, viewGrades, dayControl };
 })();
