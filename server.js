@@ -22,7 +22,7 @@ const db = open(DATA_DIR);
 CAT.seedCatalog(db);
 
 /* ---------- utilidades HTTP ---------- */
-const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
+const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 const hdrs = (extra) => Object.assign({ 'Content-Security-Policy': CSP, 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', 'X-Frame-Options': 'DENY', 'X-Robots-Tag': 'noindex', 'Permissions-Policy': 'camera=(), microphone=(), geolocation=()' }, extra || {});
 function json(res, code, obj, extra) { res.writeHead(code, hdrs(Object.assign({ 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }, extra))); res.end(JSON.stringify(obj)); }
 const ipOf = (req) => { const x = String(req.headers['x-forwarded-for'] || '').split(',').map((s) => s.trim()).filter(Boolean); return x.length ? x[x.length - 1] : req.socket.remoteAddress || '?'; };
@@ -308,7 +308,7 @@ R('GET', '/api/audit', async (req, res) => json(res, 200, { rows: db.all('SELECT
 /* --- historias de trabajo (alumnado y profesorado) --- */
 R('GET', '/api/my/charts', async (req, res, ctx) => {
   const rows = db.all('SELECT c.id, c.kind, c.name, c.status, p.id pid, p.code, p.data, (SELECT COUNT(*) FROM records r WHERE r.chart_id = c.id AND r.user_id = ? AND r.void_at IS NULL) mine, (SELECT COUNT(*) FROM records r WHERE r.chart_id = c.id AND r.void_at IS NULL) total FROM chart_members m JOIN charts c ON c.id = m.chart_id JOIN patients p ON p.id = c.patient_id WHERE m.user_id = ? AND p.archived = 0 ORDER BY c.id DESC', ctx.user.id, ctx.user.id);
-  json(res, 200, { charts: rows.map((r) => { const d = PAT.forStudent(JSON.parse(r.data)); return { id: r.id, kind: r.kind, name: r.name, status: r.status, code: r.code, patient: (d.nombre || '') + ' ' + (d.apellidos || ''), unidad: d.unidad || '', diagnostico: d.diagnostico_medico || '', mine: r.mine, total: r.total }; }) });
+  json(res, 200, { charts: rows.map((r) => { const d = PAT.forStudent(JSON.parse(r.data)); return { id: r.id, kind: r.kind, name: r.name, status: r.status, code: r.code, patient: (d.nombre || '') + ' ' + (d.apellidos || ''), unidad: d.unidad || '', habitacion: d.habitacion || '', cama: d.cama || '', sexo: d.sexo || '', nacimiento: d.fecha_nacimiento || '', alergias: (d.alergias || []).map((x) => x.agente), sin_alergias: !!d.sin_alergias, diagnostico: d.diagnostico_medico || '', mine: r.mine, total: r.total }; }) });
 });
 R('GET', '/api/charts/:id', async (req, res, ctx) => {
   const a = chartFor(ctx.user, intId(ctx.params.id)); if (!a) return bad(res, 'notfound', 404);
