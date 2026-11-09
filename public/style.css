@@ -140,3 +140,31 @@ main:focus { outline: none; }
 .toolbar { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 7px 10px; margin-bottom: 10px; }
 .toolbar select { width: auto; }
 @media (max-width: 700px) { #top .brand { margin-right: 4px; font-size: 1rem; } #top nav button { padding: 0 9px; } #top .tb { padding: 0 8px; } }
+
+/* ---- Fase 2 y 3: medicación, escalas, plan, línea temporal, gráficas, evaluación, impresión ---- */
+.daybox { gap: 6px; align-items: center; } .daybox b { min-width: 1.5em; text-align: center; font-size: 1.05rem; color: var(--acc); }
+.sec-h { margin: 16px 0 8px; font-size: 1.05rem; }
+table.mar td { vertical-align: top; }
+.slots { display: flex; flex-wrap: wrap; gap: 6px; }
+.slot { display: inline-block; border: 1px solid var(--line); border-radius: var(--r); padding: 4px 9px; font-size: .88rem; background: var(--panel); color: var(--mut); min-height: 0; }
+.slot.ok { background: #e3f4e8; border-color: #8fcba0; color: #17592b; font-weight: 700; }
+.slot.warn { background: #fff1d6; border-color: #e6bf6a; color: #7a4d00; font-weight: 700; }
+button.slot.add { border-style: dashed; border-color: var(--lilac); color: var(--acc); cursor: pointer; } button.slot.add:hover { background: var(--acc-soft); }
+.sc-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); margin-bottom: 10px; } .sc-grid .panel { margin: 0; }
+.sc-big { font-size: 2.1rem; font-weight: 900; color: var(--acc); line-height: 1.1; } .sc-max { font-size: .95rem; font-weight: 400; color: var(--mut); }
+.sc-res { margin: 8px 0; padding: 8px 10px; background: var(--acc-soft); border-radius: var(--r); }
+.plan .ph { gap: 8px; flex-wrap: wrap; }
+.tl { border-left: 3px solid var(--lilac); margin-left: 6px; padding-left: 14px; } .tl-day { margin-bottom: 8px; }
+.tl-h { font-weight: 900; color: var(--acc); margin: 6px 0; display: flex; gap: 8px; align-items: center; }
+.faded { opacity: .6; border-style: dashed; }
+.chart-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); } .chart-grid .panel { margin: 0; }
+.chart .pb { padding: 6px 8px; } svg.lc { width: 100%; height: auto; display: block; }
+svg.lc .band { fill: var(--acc-soft); } svg.lc .gl { stroke: var(--line); stroke-width: 1; } svg.lc .ax { font-size: 9px; fill: var(--mut); }
+svg.lc .ln { fill: none; stroke-width: 2; } svg.lc .l0 { stroke: var(--acc); } svg.lc .l1 { stroke: var(--lilac); } svg.lc .pt.l0 { fill: var(--acc); stroke: none; } svg.lc .pt.l1 { fill: var(--lilac); stroke: none; }
+.rub input[type=text] { flex: 1 1 200px; } .rub input[type=number] { width: 70px; flex: none; }
+.print-doc { max-width: 900px; margin: 0 auto; } .pd-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; border-bottom: 3px solid var(--lilac); padding-bottom: 8px; margin-bottom: 10px; }
+.pd-sec h2 { font-size: 1.05rem; margin: 14px 0 4px; border-bottom: 1px solid var(--line); padding-bottom: 2px; } .pd-line { padding: 3px 0; border-bottom: 1px dotted var(--line); font-size: .93rem; }
+@media print {
+  body { background: #fff; color: #000; } #top, .noprint, .skip, #toast { display: none !important; }
+  .print-doc { max-width: none; } .pd-sec { break-inside: avoid-page; } .pd-line { break-inside: avoid; }
+}

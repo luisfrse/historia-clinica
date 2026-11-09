@@ -79,8 +79,8 @@
     add(top, h('span', { class: 'brand' }, h('img', { src: '/favicon-32.png', alt: '' }), t('app')));
     if (ME) {
       const seg = location.hash.replace(/^#\/?/, '').split('/')[0];
-      const cur = seg === 'students' || seg === 'catalog' || seg === 'audit' ? seg : 'home';
-      const items = ME.staff ? [['home', '#/', 'nav_patients'], ['students', '#/students', 'nav_students'], ['catalog', '#/catalog', 'nav_catalog'], ['audit', '#/audit', 'nav_audit']] : [['home', '#/', 'nav_mine']];
+      const cur = seg === 'students' || seg === 'catalog' || seg === 'audit' || seg === 'grades' ? seg : 'home';
+      const items = ME.staff ? [['home', '#/', 'nav_patients'], ['students', '#/students', 'nav_students'], ['catalog', '#/catalog', 'nav_catalog'], ['grades', '#/grades', 'nav_grades'], ['audit', '#/audit', 'nav_audit']] : [['home', '#/', 'nav_mine']];
       add(top, h('nav', { 'aria-label': 'Principal' }, items.map(([k, href, l]) => h('button', { class: cur === k ? 'on' : '', onclick: () => { location.hash = href; } }, t(l)))));
       add(top, h('span', { class: 'who' }, ME.name));
     } else add(top, h('nav'));
@@ -175,7 +175,7 @@
     if (r.type === 'constantes') { const v = []; if (d.ta_sis != null) v.push(t('ta') + ' ' + d.ta_sis + '/' + d.ta_dia); [['fc', 'FC'], ['fr', 'FR'], ['temp', 'T'], ['spo2', 'SpO₂'], ['glucemia', 'Gluc'], ['dolor', 'Dolor']].forEach(([k, l]) => { if (d[k] != null) v.push(l + ' ' + d[k]); }); return v.join(', '); }
     if (r.type === 'balance') return t(d.dir) + ' · ' + t('v_' + d.via) + ' · ' + d.ml + ' ml';
     if (r.type === 'cuidado') return (LANG === 'ca' ? d.nombre_ca : d.nombre_es) + ' — ' + t('res_' + d.resultado);
-    return '';
+    return window.HCX ? window.HCX.summary(r) : '';
   }
 
   /* ---------- profesorado: lista y ficha de paciente ---------- */
@@ -201,9 +201,10 @@
       h('tbody', null, charts.map((c) => h('tr', null, h('td', null, h('a', { href: '#/chart/' + c.id }, c.name)), h('td', null, h('span', { class: 'chip' }, c.kind === 'team' ? t('team') : t('individual'))), h('td', null, c.members.map((m) => m.name).join(', ')), h('td', { class: 'r' }, c.recs), h('td', null, c.last ? fmtISO(c.last) : '—'), h('td', null, stateChip(c.status === 'open')),
         h('td', null, h('div', { class: 'row' }, h('button', { class: 'sm', onclick: () => { location.hash = '#/chart/' + c.id; } }, t('open_it')), h('button', { class: 'sm', onclick: async () => { try { await api('PUT', '/api/charts/' + c.id, { status: c.status === 'open' ? 'closed' : 'open' }); viewPatient(id, tab); } catch (e) { fail(e); } } }, c.status === 'open' ? t('close_chart') : t('open_chart')),
           !c.recs ? h('button', { class: 'sm danger', onclick: async () => { try { await api('DELETE', '/api/charts/' + c.id); viewPatient(id, tab); } catch (e) { fail(e); } } }, t('delete')) : null))))))) : empty(t('no_data')), { flush: true });
+    else if (tab === 'prescripciones' || tab === 'linea') body = await window.HCX.patientTab(tab, { id, refresh: () => viewPatient(id, tab) });
     else body = activityPanel(id, act);
     show(h('div', { class: 'pg-title' }, h('button', { class: 'link', onclick: () => { location.hash = '#/'; } }, t('back')), h('span', { class: 'mut' }, patient.code + (patient.archived ? ' · ' + t('archived') : ''))),
-      banner(patient, actions), tabBar([['ficha', t('tab_ficha')], ['asignar', t('tab_asignar')], ['historias', t('tab_historias'), charts.length], ['actividad', t('tab_actividad'), act.records.length]], tab, base), body);
+      banner(patient, actions), tabBar([['ficha', t('tab_ficha')], ['asignar', t('tab_asignar')], ['prescripciones', t('tab_presc')], ['linea', t('tab_linea')], ['historias', t('tab_historias'), charts.length], ['actividad', t('tab_actividad'), act.records.length]], tab, base), body);
   }
 
   function assignPanel(id, charts, uj) {
@@ -240,11 +241,11 @@
   async function viewStudents() {
     const j = await api('GET', '/api/users');
     const map = Object.assign({}, j.subject_profiles);
-    const row = (u) => h('tr', null, h('td', null, u.name, h('div', { class: 'sub' }, u.email)),
+    const row = (u) => h('tr', null, h('td', null, u.name, u.role === 'teacher' ? h('span', { class: 'chip' }, t('role_teacher')) : null, h('div', { class: 'sub' }, u.email)),
       h('td', null, h('select', { 'aria-label': t('role_prof'), onchange: async (e) => { try { await api('PUT', '/api/users/' + u.id, { profile: e.target.value }); toast(t('ok')); } catch (er) { fail(er); } } },
         h('option', { value: 'auto', selected: !u.profile_manual }, t('p_auto') + ' → ' + t('p_' + u.profile)), h('option', { value: 'enfermeria', selected: !!u.profile_manual && u.profile === 'enfermeria' }, t('p_enfermeria')), h('option', { value: 'tcae', selected: !!u.profile_manual && u.profile === 'tcae' }, t('p_tcae')))),
       h('td', null, u.last_login ? fmtISO(u.last_login) : '—'),
-      h('td', null, h('label', { class: 'row' }, h('input', { type: 'checkbox', checked: !!u.active, onchange: async (e) => { try { await api('PUT', '/api/users/' + u.id, { active: e.target.checked }); } catch (er) { fail(er); } } }), t('active'))));
+      h('td', null, h('label', { class: 'row' }, h('input', { type: 'checkbox', checked: !!u.active, onchange: async (e) => { try { await api('PUT', '/api/users/' + u.id, { active: e.target.checked }); } catch (er) { fail(er); } } }), t('active')), ME.role === 'admin' ? h('button', { class: 'sm', onclick: async () => { try { await api('PUT', '/api/users/' + u.id + '/role', { role: u.role === 'teacher' ? 'student' : 'teacher' }); viewStudents(); } catch (er) { fail(er); } } }, u.role === 'teacher' ? t('remove_teacher') : t('make_teacher')) : null));
     const groupCard = (title, list) => h('details', { class: 'panel', open: true }, h('summary', null, h('span', null, title, ' ', h('span', { class: 'chip' }, list.length))),
       h('div', { class: 'tw' }, h('table', { class: 'grid' }, h('thead', null, h('tr', null, h('th', null, t('nav_students')), h('th', null, t('role_prof')), h('th', null, t('last_login')), h('th', null, ''))), h('tbody', null, list.map(row)))));
     const known = new Set(j.subjects.map((s) => s.slug));
@@ -280,6 +281,7 @@
 
   /* ---------- registros: formulario de alta ---------- */
   function recForm(type, ctx, done) {
+    if (window.HCX && window.HCX.forms[type]) return window.HCX.forms[type](ctx, done);
     const f = {}, when = h('input', { type: 'datetime-local', value: nowInput() });
     const inp = (k, o) => (f[k] = h('input', Object.assign({ type: 'text', inputmode: 'decimal', 'aria-label': t(k) }, o || {})));
     let body;
@@ -327,11 +329,12 @@
     tab = tab || 'resumen';
     if (chartKey !== id) { chartKey = id; chartUser = ''; }
     const [c, cat] = await Promise.all([api('GET', '/api/charts/' + id + (chartUser ? '?user=' + chartUser : '')), api('GET', '/api/catalog')]);
+    if (tab === 'imprimir') return show(window.HCX.printView(c));
     const staff = ME.staff, open = c.chart.status === 'open', recs = c.records, base = '#/chart/' + id;
     const refresh = () => viewChart(id, tab);
     const byType = (ty) => recs.filter((r) => r.type === ty), live = (ty) => byType(ty).filter((r) => !r.void_at);
     const formBox = h('div');
-    const openForm = (type, rep) => { clear(formBox); formBox.appendChild(recForm(type, { chartId: id, role: c.chart.role, catalog: cat.items, replaces: rep }, (saved) => { if (saved) refresh(); else clear(formBox); })); formBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); };
+    const openForm = (type, rep, prefill) => { clear(formBox); formBox.appendChild(recForm(type, { chartId: id, role: c.chart.role, catalog: cat.items, replaces: rep, prefill, orders: c.orders }, (saved) => { if (saved) refresh(); else clear(formBox); })); formBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); };
     const voidRec = async (r) => { const reason = await ask(t('void'), t('void_prompt'), 5); if (!reason) return; try { await api('POST', '/api/records/' + r.id + '/void', { reason }); refresh(); } catch (e) { fail(e); } };
     const commentRec = async (r) => { const text = await ask(t('comment'), t('comment_prompt'), 2); if (!text) return; try { await api('POST', '/api/charts/' + id + '/comments', { text, record_id: r.id }); refresh(); } catch (e) { fail(e); } };
     const actions = (r) => {
@@ -346,6 +349,7 @@
     const timeCell = (r) => h('td', { title: r.occurred.replace('T', ' ') }, fmtDT(r.occurred));
     const tbl = (heads, rows) => (rows.length ? h('div', { class: 'tw' }, h('table', { class: 'grid' }, h('thead', null, h('tr', null, heads.map((x) => h('th', null, x)))), h('tbody', null, rows))) : empty(t('no_records')));
 
+    const X = { c, id, staff, open, role: c.chart.role, recs, byType, live, actions, voidInfo, cmts, who, timeCell, tbl, openForm, refresh };
     let body;
     if (tab === 'resumen') {
       const d = c.patient.data, lastV = live('constantes')[0], lastN = live('nota')[0];
@@ -359,27 +363,29 @@
       const cols = byType('constantes'), rowsP = PARAMS.filter((p) => cols.some((r) => p[3](r.data) != null));
       if (!cols.length) body = panel(null, empty(t('no_records')));
       else {
+        const graphs = window.HCX.vitalCharts(cols);
         const head = h('tr', null, h('th', { class: 'lbl' }, t('fl_param')), cols.map((r) => h('th', { title: r.occurred.replace('T', ' ') + ' · ' + r.author }, fmtDT(r.occurred), h('div', { class: 'by' }, r.author.split(' ')[0]), r.void_at ? h('div', { class: 'by' }, t('fl_voided')) : null)));
         const trs = rowsP.map((p) => h('tr', null, h('td', { class: 'lbl' }, plain(p[1]), p[2] ? h('span', { class: 'u' }, p[2]) : null), cols.map((r) => { const v = p[3](r.data), fl = v == null ? '' : p[4](r.data); return h('td', { class: (r.void_at ? 'void ' : '') + (!r.void_at && fl ? fl : '') }, v == null ? '' : String(v), !r.void_at && fl === 'hi' ? ' ▲' : !r.void_at && fl === 'lo' ? ' ▼' : ''); })));
         trs.push(h('tr', null, h('td', { class: 'lbl' }, t('obs')), cols.map((r) => h('td', { class: r.void_at ? 'void' : '' }, r.data.obs || ''))));
         if (cols.some((r) => (r.comments || []).length)) trs.push(h('tr', null, h('td', { class: 'lbl' }, t('comments')), cols.map((r) => h('td', null, (r.comments || []).map((cm) => cm.text).join(' / ')))));
         trs.push(h('tr', null, h('td', { class: 'lbl' }, ''), cols.map((r) => h('td', null, actions(r)))));
-        body = h('div', { class: 'panel' }, h('div', { class: 'pb flush flow tw' }, h('table', null, h('thead', null, head), h('tbody', null, trs))), h('div', { class: 'legend' }, t('fl_legend')));
+        body = [h('div', { class: 'panel' }, h('div', { class: 'pb flush flow tw' }, h('table', null, h('thead', null, head), h('tbody', null, trs))), h('div', { class: 'legend' }, t('fl_legend'))), h('h2', { class: 'sec-h' }, t('ch_vitals')), graphs];
       }
     } else if (tab === 'balance') {
       const bs = byType('balance'), days = {};
       bs.filter((r) => !r.void_at).forEach((r) => { const k = r.occurred.slice(0, 10); days[k] = days[k] || { i: 0, o: 0 }; days[k][r.data.dir === 'ingesta' ? 'i' : 'o'] += r.data.ml; });
       const dk = Object.keys(days).sort().reverse();
-      body = [dk.length ? panel(null, h('div', { class: 'tw' }, h('table', { class: 'grid' }, h('thead', null, h('tr', null, [t('bal_day'), t('bal_in'), t('bal_out'), t('bal_net')].map((x, i) => h('th', { class: i ? 'r' : '' }, x)))), h('tbody', null, dk.map((k) => { const n = days[k].i - days[k].o; return h('tr', null, h('td', null, fmtD(k)), h('td', { class: 'r' }, days[k].i), h('td', { class: 'r' }, days[k].o), h('td', { class: 'r' }, h('b', null, (n > 0 ? '+' : '') + n))); })))), { flush: true }) : null,
+      body = [window.HCX.balanceShifts(bs), dk.length ? panel(null, h('div', { class: 'tw' }, h('table', { class: 'grid' }, h('thead', null, h('tr', null, [t('bal_day'), t('bal_in'), t('bal_out'), t('bal_net')].map((x, i) => h('th', { class: i ? 'r' : '' }, x)))), h('tbody', null, dk.map((k) => { const n = days[k].i - days[k].o; return h('tr', null, h('td', null, fmtD(k)), h('td', { class: 'r' }, days[k].i), h('td', { class: 'r' }, days[k].o), h('td', { class: 'r' }, h('b', null, (n > 0 ? '+' : '') + n))); })))), { flush: true }) : null,
         panel(null, tbl([t('col_time'), t('col_type'), t('ml'), t('col_author'), t('col_detail'), ''], bs.map((r) => h('tr', { class: r.void_at ? 'void' : '' }, timeCell(r), h('td', null, h('span', { class: 'vv' }, t(r.data.dir) + ' · ' + t('v_' + r.data.via))), h('td', null, h('span', { class: 'vv' }, r.data.ml + ' ml')), who(r), h('td', null, r.data.obs || '', voidInfo(r), cmts(r)), h('td', null, actions(r))))), { flush: true })];
     } else if (tab === 'cuidados') {
       const cs = byType('cuidado');
       body = panel(null, tbl([t('col_time'), t('care'), t('col_result'), t('col_detail'), t('col_author'), ''], cs.map((r) => h('tr', { class: r.void_at ? 'void' : '' }, timeCell(r), h('td', null, h('span', { class: 'vv' }, LANG === 'ca' ? r.data.nombre_ca : r.data.nombre_es)), h('td', null, h('span', { class: 'chip ' + (r.data.resultado === 'realizado' ? 'grn' : 'amb') }, t('res_' + r.data.resultado))), h('td', null, r.data.obs || '', voidInfo(r), cmts(r)), who(r), h('td', null, actions(r))))), { flush: true });
-    } else body = [h('p', { class: 'mut' }, t('readonly_note')), fichaPanels(c.patient, staff)];
+    } else if (window.HCX.chartTab(tab, X)) body = window.HCX.chartTab(tab, X);
+    else body = [h('p', { class: 'mut' }, t('readonly_note')), fichaPanels(c.patient, staff)];
 
-    const tabs = [['resumen', t('tab_resumen')], ['evolucion', t('tab_evolucion'), byType('nota').length], ['constantes', t('tab_constantes'), byType('constantes').length], ['balance', t('tab_balance'), byType('balance').length], ['cuidados', t('tab_cuidados'), byType('cuidado').length], ['ficha', t('tab_ficha')]];
-    const toolbar = !staff && open ? h('div', { class: 'toolbar row' }, h('b', null, t('tb_record') + ':'), ['nota', 'constantes', 'balance', 'cuidado'].map((ty) => h('button', { class: 'pri sm', onclick: () => openForm(ty) }, '+ ' + t('r_' + ty))))
-      : staff && c.members.length > 1 ? h('div', { class: 'toolbar row' }, h('label', { class: 'row' }, t('filter_student') + ':', h('select', { onchange: (e) => { chartUser = e.target.value; refresh(); } }, h('option', { value: '' }, t('all_students')), c.members.map((m) => h('option', { value: m.id, selected: String(m.id) === String(chartUser) }, m.name))))) : null;
+    const tabs = [['resumen', t('tab_resumen')], ['evolucion', t('tab_evolucion'), byType('nota').length], ['constantes', t('tab_constantes'), byType('constantes').length], ['balance', t('tab_balance'), byType('balance').length], ['cuidados', t('tab_cuidados'), byType('cuidado').length]].concat(window.HCX.extraTabs(X), [['ficha', t('tab_ficha')]]);
+    const toolbar = !staff && open ? h('div', { class: 'toolbar row' }, h('b', null, t('tb_record') + ':'), ['nota', 'constantes', 'balance', 'cuidado'].map((ty) => h('button', { class: 'pri sm', onclick: () => openForm(ty) }, '+ ' + t('r_' + ty))), h('button', { class: 'sm', onclick: () => { location.hash = base + '/imprimir'; } }, t('print')))
+      : staff ? h('div', { class: 'toolbar row' }, window.HCX.dayControl(id, c.chart.day, refresh), c.members.length > 1 ? h('label', { class: 'row' }, t('filter_student') + ':', h('select', { onchange: (e) => { chartUser = e.target.value; refresh(); } }, h('option', { value: '' }, t('all_students')), c.members.map((m) => h('option', { value: m.id, selected: String(m.id) === String(chartUser) }, m.name)))) : null, h('button', { class: 'sm', onclick: () => { location.hash = base + '/imprimir'; } }, t('print'))) : null;
     const right = [h('span', { class: 'chip' }, c.chart.kind === 'team' ? t('team') + ': ' + c.chart.name : t('individual')), stateChip(open), c.chart.role ? h('span', { class: 'chip gry' }, t('p_' + c.chart.role)) : null];
     show(h('div', { class: 'pg-title' }, h('button', { class: 'link', onclick: () => { history.length > 1 ? history.back() : (location.hash = '#/'); } }, t('back')), h('span', { class: 'mut' }, t('members') + ': ' + c.members.map((m) => m.name).join(', '))),
       banner(c.patient, right), tabBar(tabs, tab, base), !open && !staff ? h('div', { class: 'panel warn' }, h('div', { class: 'pb' }, t('chart_closed'))) : null, toolbar, formBox, body);
@@ -395,6 +401,8 @@
       charts.length ? panel(null, h('div', { class: 'tw' }, h('table', { class: 'grid' }, h('thead', null, h('tr', null, [t('col_patient'), t('col_age'), t('col_loc'), t('col_dx'), t('col_chart'), t('col_mine'), t('col_state')].map((x, i) => h('th', { class: i === 5 ? 'r' : '' }, x)))), h('tbody', null, rows))), { flush: true }) : panel(null, empty(t('mine_empty'))));
   }
 
+  window.HC = { h, add, clear, api, toast, fail, panel, empty, field, fmtD, fmtDT, fmtISO, nowInput, show, t, plain, recSummary, lang: () => LANG };
+
   /* ---------- router ---------- */
   async function route() {
     if (!ME) return;
@@ -409,6 +417,7 @@
       if (a === 'students') return await viewStudents();
       if (a === 'catalog') return await viewCatalog();
       if (a === 'audit') return await viewAudit();
+      if (a === 'grades') return await window.HCX.viewGrades();
       return await viewPatients();
     } catch (e) { fail(e); if (e.status === 404) location.hash = '#/'; }
   }
@@ -417,5 +426,5 @@
   }
   document.querySelector('.skip').addEventListener('click', (e) => { e.preventDefault(); main.focus(); });
   window.addEventListener('hashchange', route);
-  boot();
+  window.addEventListener('DOMContentLoaded', boot);
 })();

@@ -91,6 +91,11 @@ function chartFor(user, chartId) {
   const m = db.get('SELECT role FROM chart_members WHERE chart_id = ? AND user_id = ?', c.id, user.id);
   return m ? { chart: c, role: m.role, staff: false } : null;
 }
+const orderOut = (o) => ({ id: o.id, drug: o.drug, dose: o.dose, route: o.route, freq: o.freq, times: o.times ? o.times.split(',') : [], prn: !!o.prn, start_day: o.start_day, end_day: o.end_day, notes: o.notes, active: !!o.active });
+/* El alumnado solo ve lo que ya toca según el día del caso; el profesorado lo ve todo. */
+const visibleOrders = (chart) => db.all('SELECT * FROM orders WHERE patient_id = ? AND active = 1 AND start_day <= ? ORDER BY start_day, id', chart.patient_id, chart.day);
+const visibleEvents = (chart) => db.all('SELECT * FROM events WHERE patient_id = ? AND day <= ? ORDER BY day, id', chart.patient_id, chart.day);
+const evOut = (e) => ({ id: e.id, kind: e.kind, day: e.day, title: e.title, body: e.body });
 const catalogGet = (id) => db.get('SELECT * FROM catalog WHERE id = ?', id);
 const membersOf = (cid) => db.all('SELECT u.id, u.name, u.email, m.role FROM chart_members m JOIN users u ON u.id = m.user_id WHERE m.chart_id = ? ORDER BY u.name COLLATE NOCASE', cid);
 function recordsOf(cid, userFilter) {
@@ -226,7 +231,8 @@ R('PUT', '/api/charts/:id', async (req, res, ctx) => {
   const b = await readJson(req, 2e3);
   if (b.status === 'open' || b.status === 'closed') db.run('UPDATE charts SET status = ? WHERE id = ?', b.status, c.id);
   if (b.name != null) db.run('UPDATE charts SET name = ? WHERE id = ?', U.clip(b.name, 80) || c.name, c.id);
-  audit(ctx.user.email, 'historia-edicion', '#' + c.id + ' ' + (b.status || ''));
+  if (b.day != null) { const dd = intId(b.day); if (!dd || dd > 60) return bad(res, 'day'); db.run('UPDATE charts SET day = ? WHERE id = ?', dd, c.id); }
+  audit(ctx.user.email, 'historia-edicion', '#' + c.id + ' ' + (b.status || '') + (b.day ? ' día ' + b.day : ''));
   json(res, 200, { ok: true });
 }, { staff: true });
 R('DELETE', '/api/charts/:id', async (req, res, ctx) => {
@@ -314,7 +320,10 @@ R('GET', '/api/charts/:id', async (req, res, ctx) => {
   const a = chartFor(ctx.user, intId(ctx.params.id)); if (!a) return bad(res, 'notfound', 404);
   const p = db.get('SELECT * FROM patients WHERE id = ?', a.chart.patient_id);
   json(res, 200, {
-    chart: { id: a.chart.id, kind: a.chart.kind, name: a.chart.name, status: a.chart.status, role: a.role }, patient: patientCard(p, a.staff),
+    chart: { id: a.chart.id, kind: a.chart.kind, name: a.chart.name, status: a.chart.status, role: a.role, day: a.chart.day }, patient: patientCard(p, a.staff),
+    orders: (a.staff ? db.all('SELECT * FROM orders WHERE patient_id = ? ORDER BY start_day, id', p.id) : visibleOrders(a.chart)).map(orderOut),
+    events: (a.staff ? db.all('SELECT * FROM events WHERE patient_id = ? ORDER BY day, id', p.id) : visibleEvents(a.chart)).map(evOut),
+    grades: gradesFor(a, ctx.user),
     members: membersOf(a.chart.id), records: recordsOf(a.chart.id, a.staff ? ctx.url.searchParams.get('user') : null), comments: chartComments(a.chart.id),
   });
 });
@@ -325,7 +334,7 @@ R('POST', '/api/charts/:id/records', async (req, res, ctx) => {
   if (db.get('SELECT archived FROM patients WHERE id = ?', a.chart.patient_id).archived) return bad(res, 'archived', 409);
   const b = await readJson(req, 2e5);
   if (!CAT.TYPES.includes(b.type)) return bad(res, 'tipo');
-  let data; try { data = CAT.validate(b.type, b.data, { role: a.role, catalog: catalogGet }); } catch (e) { return bad(res, 'dato:' + e.message); }
+  let data; try { data = CAT.validate(b.type, b.data, { role: a.role, catalog: catalogGet, order: (id) => visibleOrders(a.chart).find((o) => o.id === id), record: (id, ty) => db.get('SELECT id FROM records WHERE id = ? AND chart_id = ? AND type = ? AND void_at IS NULL', id, a.chart.id, ty) }); } catch (e) { return bad(res, 'dato:' + e.message); }
   const occurred = b.occurred ? String(b.occurred) : U.nowLocal();
   if (!U.validLocal(occurred)) return bad(res, 'fecha');
   if (occurred > U.nowLocal().slice(0, 11) + '23:59') return bad(res, 'futuro');
@@ -352,6 +361,120 @@ R('POST', '/api/charts/:id/comments', async (req, res, ctx) => {
   let rid = null; if (b.record_id) { const rr = db.get('SELECT id FROM records WHERE id = ? AND chart_id = ?', intId(b.record_id), c.id); if (!rr) return bad(res, 'record'); rid = rr.id; }
   db.run('INSERT INTO comments (chart_id, record_id, user_id, text, created) VALUES (?,?,?,?,?)', c.id, rid, ctx.user.id, text, new Date().toISOString());
   json(res, 200, { ok: true });
+}, { staff: true });
+
+/* --- prescripciones y línea temporal (profesorado) --- */
+const timesOk = (s) => { const l = String(s || '').split(',').map((x) => x.trim()).filter(Boolean); if (l.length > 12 || !l.every((x) => /^([01]\d|2[0-3]):[0-5]\d$/.test(x))) return null; return [...new Set(l)].sort().join(','); };
+function orderFields(b, o) {
+  const drug = U.clip(b.drug != null ? b.drug : o && o.drug, 120); if (!drug) return { error: 'drug' };
+  const route = CAT.ROUTES.includes(b.route) ? b.route : o ? o.route : 'oral';
+  const prn = b.prn != null ? (b.prn ? 1 : 0) : o ? o.prn : 0;
+  const times = prn ? '' : timesOk(b.times != null ? b.times : o && o.times); if (times == null) return { error: 'times' };
+  const sd = b.start_day != null ? intId(b.start_day) : o ? o.start_day : 1, ed = b.end_day === '' || b.end_day === null ? null : b.end_day != null ? intId(b.end_day) : o ? o.end_day : null;
+  if (!sd || sd > 60 || (ed != null && (ed < sd || ed > 60))) return { error: 'day' };
+  return { v: [drug, U.clip(b.dose != null ? b.dose : o && o.dose, 80), route, U.clip(b.freq != null ? b.freq : o && o.freq, 80), times, prn, sd, ed, U.clipML(b.notes != null ? b.notes : o && o.notes, 500)] };
+}
+R('GET', '/api/patients/:id/plan', async (req, res, ctx) => {
+  const p = db.get('SELECT id FROM patients WHERE id = ?', intId(ctx.params.id)); if (!p) return bad(res, 'notfound', 404);
+  json(res, 200, { orders: db.all('SELECT * FROM orders WHERE patient_id = ? ORDER BY start_day, id', p.id).map(orderOut), events: db.all('SELECT * FROM events WHERE patient_id = ? ORDER BY day, id', p.id).map(evOut) });
+}, { staff: true });
+R('POST', '/api/patients/:id/orders', async (req, res, ctx) => {
+  const p = db.get('SELECT id FROM patients WHERE id = ?', intId(ctx.params.id)); if (!p) return bad(res, 'notfound', 404);
+  const f = orderFields(await readJson(req, 8e3), null); if (f.error) return bad(res, f.error);
+  const r = db.run('INSERT INTO orders (patient_id, drug, dose, route, freq, times, prn, start_day, end_day, notes, created) VALUES (?,?,?,?,?,?,?,?,?,?,?)', p.id, ...f.v, new Date().toISOString());
+  audit(ctx.user.email, 'prescripcion-alta', '#' + p.id + ' ' + f.v[0]); json(res, 200, { id: Number(r.lastInsertRowid) });
+}, { staff: true });
+R('PUT', '/api/orders/:id', async (req, res, ctx) => {
+  const o = db.get('SELECT * FROM orders WHERE id = ?', intId(ctx.params.id)); if (!o) return bad(res, 'notfound', 404);
+  const b = await readJson(req, 8e3);
+  if (b.active != null && Object.keys(b).length === 1) { db.run('UPDATE orders SET active = ? WHERE id = ?', b.active ? 1 : 0, o.id); return json(res, 200, { ok: true }); }
+  const f = orderFields(b, o); if (f.error) return bad(res, f.error);
+  db.run('UPDATE orders SET drug=?, dose=?, route=?, freq=?, times=?, prn=?, start_day=?, end_day=?, notes=? WHERE id = ?', ...f.v, o.id);
+  audit(ctx.user.email, 'prescripcion-edicion', '#' + o.id); json(res, 200, { ok: true });
+}, { staff: true });
+R('DELETE', '/api/orders/:id', async (req, res, ctx) => {
+  const o = db.get('SELECT * FROM orders WHERE id = ?', intId(ctx.params.id)); if (!o) return bad(res, 'notfound', 404);
+  if (db.get("SELECT 1 x FROM records r JOIN charts c ON c.id = r.chart_id WHERE c.patient_id = ? AND r.type = 'medicacion' AND json_extract(r.data, '$.order_id') = ?", o.patient_id, o.id)) return bad(res, 'has-records', 409);
+  db.run('DELETE FROM orders WHERE id = ?', o.id); audit(ctx.user.email, 'prescripcion-borrada', '#' + o.id); json(res, 200, { ok: true });
+}, { staff: true });
+function eventFields(b, e) {
+  const title = U.clip(b.title != null ? b.title : e && e.title, 160); if (!title) return { error: 'title' };
+  const day = b.day != null ? intId(b.day) : e ? e.day : 1; if (!day || day > 60) return { error: 'day' };
+  return { v: [['prueba', 'evento'].includes(b.kind) ? b.kind : e ? e.kind : 'prueba', day, title, U.clipML(b.body != null ? b.body : e && e.body, 3000)] };
+}
+R('POST', '/api/patients/:id/events', async (req, res, ctx) => {
+  const p = db.get('SELECT id FROM patients WHERE id = ?', intId(ctx.params.id)); if (!p) return bad(res, 'notfound', 404);
+  const f = eventFields(await readJson(req, 8e3), null); if (f.error) return bad(res, f.error);
+  const r = db.run('INSERT INTO events (patient_id, kind, day, title, body, created) VALUES (?,?,?,?,?,?)', p.id, ...f.v, new Date().toISOString());
+  json(res, 200, { id: Number(r.lastInsertRowid) });
+}, { staff: true });
+R('PUT', '/api/events/:id', async (req, res, ctx) => {
+  const e = db.get('SELECT * FROM events WHERE id = ?', intId(ctx.params.id)); if (!e) return bad(res, 'notfound', 404);
+  const f = eventFields(await readJson(req, 8e3), e); if (f.error) return bad(res, f.error);
+  db.run('UPDATE events SET kind=?, day=?, title=?, body=? WHERE id = ?', ...f.v, e.id); json(res, 200, { ok: true });
+}, { staff: true });
+R('DELETE', '/api/events/:id', async (req, res, ctx) => { db.run('DELETE FROM events WHERE id = ?', intId(ctx.params.id)); json(res, 200, { ok: true }); }, { staff: true });
+
+/* --- profesorado adicional (solo administración) --- */
+R('PUT', '/api/users/:id/role', async (req, res, ctx) => {
+  if (ctx.user.role !== 'admin') return bad(res, 'forbidden', 403);
+  const u = db.get("SELECT * FROM users WHERE id = ? AND role != 'admin'", intId(ctx.params.id)); if (!u) return bad(res, 'notfound', 404);
+  const b = await readJson(req, 2e3); const role = b.role === 'teacher' ? 'teacher' : 'student';
+  db.run('UPDATE users SET role = ? WHERE id = ?', role, u.id); audit(ctx.user.email, 'usuario-rol', u.email + ' → ' + role);
+  json(res, 200, { ok: true });
+}, { staff: true });
+
+/* --- evaluación: rúbrica y notas --- */
+const DEF_RUBRIC = [
+  { id: 'valoracion', es: 'Valoración del paciente', ca: 'Valoració del pacient', w: 2 },
+  { id: 'registros', es: 'Calidad de los registros (constantes, balance, cuidados)', ca: 'Qualitat dels registres (constants, balanç, cures)', w: 2 },
+  { id: 'plan', es: 'Plan de cuidados', ca: 'Pla de cures', w: 3 },
+  { id: 'medicacion', es: 'Seguridad y medicación', ca: 'Seguretat i medicació', w: 2 },
+  { id: 'comunicacion', es: 'Notas de evolución y comunicación', ca: "Notes d'evolució i comunicació", w: 1 },
+];
+const getRubric = () => { try { const r = JSON.parse(db.getSetting('rubric', '')); return Array.isArray(r) && r.length ? r : DEF_RUBRIC; } catch (_) { return DEF_RUBRIC; } };
+function gradeTotal(scores, rubric) {
+  let sw = 0, acc = 0;
+  for (const c of rubric) { const v = scores[c.id]; if (typeof v === 'number') { sw += c.w; acc += (c.w * v) / 4; } }
+  return sw ? Math.round((acc / sw) * 100) / 10 : null;
+}
+const gradeOut = (g) => ({ user_id: g.user_id, scores: JSON.parse(g.scores), total: g.total, comment: g.comment, published: !!g.published, updated: g.updated });
+function gradesFor(a, user) {
+  if (a.staff) return { rubric: getRubric(), list: db.all('SELECT * FROM grades WHERE chart_id = ?', a.chart.id).map(gradeOut) };
+  const g = db.get('SELECT * FROM grades WHERE chart_id = ? AND user_id = ? AND published = 1', a.chart.id, user.id);
+  return g ? { rubric: getRubric(), list: [gradeOut(g)] } : { rubric: [], list: [] };
+}
+R('GET', '/api/rubric', async (req, res) => json(res, 200, { rubric: getRubric() }), { staff: true });
+R('PUT', '/api/rubric', async (req, res, ctx) => {
+  const b = await readJson(req, 2e4); const out = [];
+  for (const c of (Array.isArray(b.rubric) ? b.rubric : []).slice(0, 12)) {
+    const es = U.clip(c.es, 120); if (!es) continue;
+    out.push({ id: 'c' + (out.length + 1), es, ca: U.clip(c.ca, 120) || es, w: Math.min(10, Math.max(1, intId(c.w) || 1)) });
+  }
+  if (!out.length) return bad(res, 'rubric');
+  db.setSetting('rubric', JSON.stringify(out)); audit(ctx.user.email, 'rubrica', out.length + ' criterios'); json(res, 200, { ok: true });
+}, { staff: true });
+R('PUT', '/api/charts/:id/grades/:uid', async (req, res, ctx) => {
+  const c = db.get('SELECT * FROM charts WHERE id = ?', intId(ctx.params.id)); if (!c) return bad(res, 'notfound', 404);
+  const uid = intId(ctx.params.uid); if (!db.get('SELECT 1 x FROM chart_members WHERE chart_id = ? AND user_id = ?', c.id, uid)) return bad(res, 'notfound', 404);
+  const b = await readJson(req, 8e3), rub = getRubric(), scores = {};
+  for (const cr of rub) { const v = b.scores && b.scores[cr.id]; if (v === '' || v == null) continue; const n = Number(v); if (!Number.isInteger(n) || n < 0 || n > 4) return bad(res, 'scores'); scores[cr.id] = n; }
+  const total = gradeTotal(scores, rub);
+  db.run('INSERT INTO grades (chart_id, user_id, scores, total, comment, published, by_email, updated) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(chart_id, user_id) DO UPDATE SET scores = excluded.scores, total = excluded.total, comment = excluded.comment, published = excluded.published, by_email = excluded.by_email, updated = excluded.updated',
+    c.id, uid, JSON.stringify(scores), total, U.clipML(b.comment, 2000), b.published ? 1 : 0, ctx.user.email, new Date().toISOString());
+  audit(ctx.user.email, 'nota', '#' + c.id + ' alumno ' + uid + ' = ' + total + (b.published ? ' (publicada)' : ''));
+  json(res, 200, { ok: true, total });
+}, { staff: true });
+const GRADE_SQL = 'SELECT g.*, u.name, u.email, c.name chart_name, c.kind, p.code, p.data pdata FROM grades g JOIN users u ON u.id = g.user_id JOIN charts c ON c.id = g.chart_id JOIN patients p ON p.id = c.patient_id ORDER BY p.id, c.id, u.name COLLATE NOCASE';
+R('GET', '/api/grades', async (req, res) => {
+  const rows = db.all(GRADE_SQL);
+  json(res, 200, { rubric: getRubric(), grades: rows.map((r) => Object.assign(gradeOut(r), { chart_id: r.chart_id, name: r.name, email: r.email, chart: r.chart_name, kind: r.kind, code: r.code, patient: JSON.parse(r.pdata).apellidos || '' })) });
+}, { staff: true });
+const csvCell = (v) => { let s = String(v == null ? '' : v); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };
+R('GET', '/api/grades.csv', async (req, res) => {
+  const out = ['Alumno;Correo;Caso;Historia;Nota (0-10);Publicada;Comentario'].concat(db.all(GRADE_SQL).map((r) => [r.name, r.email, r.code + ' ' + (JSON.parse(r.pdata).apellidos || ''), r.chart_name, r.total == null ? '' : String(r.total).replace('.', ','), r.published ? 'sí' : 'no', r.comment.replace(/\s+/g, ' ')].map(csvCell).join(';')));
+  res.writeHead(200, hdrs({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="notas-historia-clinica.csv"', 'Cache-Control': 'no-store' }));
+  res.end('\ufeff' + out.join('\r\n'));
 }, { staff: true });
 
 /* ---------- servidor ---------- */

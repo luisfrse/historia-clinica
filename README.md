@@ -58,7 +58,16 @@ npm start       # http://localhost:3000 (usa ADMIN_PASSWORD=... para entrar sin 
 - El profesorado no puede escribir registros como alumno.
 - Las anulaciones no borran datos. Solo se eliminan historias vacías (sin registros).
 
-## Hoja de ruta
+## Funciones clínicas
 
-- **Fase 2**: prescripciones médicas y hoja de administración de medicación (MAR), escalas (Barthel, Braden, Norton, Glasgow, Downton, EVA), valoración por patrones de Gordon / necesidades de Henderson, gráficas de constantes y balance hídrico por turnos, pruebas complementarias liberadas por días (línea temporal de la estancia).
-- **Fase 3**: plan de cuidados (diagnóstico → objetivos → intervenciones → evaluación), informe de enfermería / alta, nota por caso con rúbrica enviable a la hoja de notas del Campus, exportación a PDF, otros profesores.
+- **Registros del alumnado** (solo se añaden; se anulan con motivo): notas de evolución, constantes (hoja de flujo con valores fuera de rango y gráficas), balance hídrico (totales por día y por turnos), cuidados del catálogo, medicación, escalas, valoración, plan de cuidados e informe.
+- **Medicación (MAR)**: el profesorado prescribe por paciente (fármaco, dosis, vía, horas, desde/hasta día); el alumnado registra administraciones con la comprobación de los cinco correctos. El perfil TCAE solo puede registrar vía oral y tópica.
+- **Escalas** Barthel, Braden, Norton, Glasgow y Downton, con puntuación y nivel calculados en el servidor. **Valoración** por los 11 patrones de Gordon. **Plan de cuidados**: problema, causa, objetivo, intervenciones y evaluación. Estos registros son solo del perfil de enfermería.
+- **Línea temporal por días**: cada historia tiene un día del caso que avanza el profesorado; pruebas, eventos y prescripciones se liberan al alumnado según ese día.
+- **Evaluación**: rúbrica editable (criterios 0–4 con peso), nota 0–10 por alumno y caso, publicada o no al alumnado, y exportación CSV (pestaña Notas).
+- **Impresión**: la historia completa se imprime o se guarda en PDF desde el navegador.
+- **Profesorado adicional**: la administración puede dar acceso de profesorado a cualquier usuario desde Alumnado.
+
+## Pendiente
+
+- Enviar las notas directamente a la hoja de notas del Campus (hoy se exportan en CSV).
