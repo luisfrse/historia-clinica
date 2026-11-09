@@ -122,10 +122,13 @@
   ];
   const LONG = new Set(['motivo_ingreso', 'enfermedad_actual', 'diagnostico_medico', 'antecedentes_personales', 'antecedentes_familiares', 'intervenciones_previas', 'medicacion_habitual', 'autonomia', 'habitos', 'situacion_social', 'riesgos', 'notas_docente', 'objetivos_aprendizaje']);
   const DATES = new Set(['fecha_nacimiento', 'fecha_ingreso']), NUMS = new Set(['peso', 'talla']);
-  const dl = (d, keys) => h('dl', { class: 'ficha' }, keys.filter((k) => d[k] != null && d[k] !== '').map((k) => {
-    let v = d[k]; if (k === 'sexo') v = t('sex_' + v); if (DATES.has(k)) v = fmtD(v);
-    return h('div', null, h('dt', null, t('f_' + k)), h('dd', null, String(v)));
-  }));
+  const dl = (d, keys) => {
+    const ks = keys.filter((k) => d[k] != null && d[k] !== ''), item = (k) => {
+      let v = d[k]; if (k === 'sexo') v = t('sex_' + v); if (DATES.has(k)) v = fmtD(v);
+      return h('div', { class: LONG.has(k) ? 'long' : null }, h('dt', null, t('f_' + k)), h('dd', null, String(v)));
+    };
+    return h('dl', { class: 'ficha' }, ks.filter((k) => !LONG.has(k)).map(item), ks.filter((k) => LONG.has(k)).map(item));
+  };
   function fichaPanels(p, staff) {
     const d = p.data, out = [];
     const al = d.alergias || [];
@@ -376,7 +379,7 @@
       const bs = byType('balance'), days = {};
       bs.filter((r) => !r.void_at).forEach((r) => { const k = r.occurred.slice(0, 10); days[k] = days[k] || { i: 0, o: 0 }; days[k][r.data.dir === 'ingesta' ? 'i' : 'o'] += r.data.ml; });
       const dk = Object.keys(days).sort().reverse();
-      body = [window.HCX.balanceShifts(bs), dk.length ? panel(null, h('div', { class: 'tw' }, h('table', { class: 'grid' }, h('thead', null, h('tr', null, [t('bal_day'), t('bal_in'), t('bal_out'), t('bal_net')].map((x, i) => h('th', { class: i ? 'r' : '' }, x)))), h('tbody', null, dk.map((k) => { const n = days[k].i - days[k].o; return h('tr', null, h('td', null, fmtD(k)), h('td', { class: 'r' }, days[k].i), h('td', { class: 'r' }, days[k].o), h('td', { class: 'r' }, h('b', null, (n > 0 ? '+' : '') + n))); })))), { flush: true }) : null,
+      body = [window.HCX.balanceChart(bs), window.HCX.balanceShifts(bs), dk.length ? panel(null, h('div', { class: 'tw' }, h('table', { class: 'grid' }, h('thead', null, h('tr', null, [t('bal_day'), t('bal_in'), t('bal_out'), t('bal_net')].map((x, i) => h('th', { class: i ? 'r' : '' }, x)))), h('tbody', null, dk.map((k) => { const n = days[k].i - days[k].o; return h('tr', null, h('td', null, fmtD(k)), h('td', { class: 'r' }, days[k].i), h('td', { class: 'r' }, days[k].o), h('td', { class: 'r' }, h('b', null, (n > 0 ? '+' : '') + n))); })))), { flush: true }) : null,
         panel(null, tbl([t('col_time'), t('col_type'), t('ml'), t('col_author'), t('col_detail'), ''], bs.map((r) => h('tr', { class: r.void_at ? 'void' : '' }, timeCell(r), h('td', null, h('span', { class: 'vv' }, t(r.data.dir) + ' · ' + t('v_' + r.data.via))), h('td', null, h('span', { class: 'vv' }, r.data.ml + ' ml')), who(r), h('td', null, r.data.obs || '', voidInfo(r), cmts(r)), h('td', null, actions(r))))), { flush: true })];
     } else if (tab === 'cuidados') {
       const cs = byType('cuidado');

@@ -696,7 +696,7 @@ R('POST', '/api/import/example', async (req, res, ctx) => {
     ['constantes', { ta_sis: 135, ta_dia: 80, fc: 88, fr: 20, temp: 37.2, spo2: 93, glucemia: 168 }, at(1, '08:00')],
     ['constantes', { ta_sis: 132, ta_dia: 80, fc: 86, fr: 20, temp: 36.9, spo2: 93, glucemia: 245 }, at(1, '20:00')],
     ['constantes', { ta_sis: 128, ta_dia: 78, fc: 82, fr: 18, temp: 36.8, spo2: 95, dolor: 1 }, at(0, '08:00')],
-    ['balance', { dir: 'ingesta', via: 'oral', ml: 600 }, at(1, '14:00')], ['balance', { dir: 'ingesta', via: 'iv', ml: 500 }, at(1, '16:00')], ['balance', { dir: 'eliminacion', via: 'diuresis', ml: 900 }, at(1, '18:00')],
+    ['balance', { dir: 'ingesta', via: 'oral', ml: 600 }, at(1, '14:00')], ['balance', { dir: 'ingesta', via: 'iv', ml: 500 }, at(1, '16:00')], ['balance', { dir: 'eliminacion', via: 'diuresis', ml: 900 }, at(1, '18:00')], ['balance', { dir: 'eliminacion', via: 'vomito', ml: 150 }, at(1, '22:00')], ['balance', { dir: 'ingesta', via: 'oral', ml: 700 }, at(1, '20:00')], ['balance', { dir: 'eliminacion', via: 'diuresis', ml: 750 }, at(0, '07:30')], ['balance', { dir: 'ingesta', via: 'oral', ml: 800 }, at(0, '08:30')],
     ['nota', { texto: lang === 'ca' ? 'Pacient conscient i orientada, amb dispnea en parlar. Es manté amb ulleres nasals a 2 l/min. Tolera la dieta. Refereix tos amb expectoració groguenca.' : 'Paciente consciente y orientada, con disnea al hablar. Se mantiene con gafas nasales a 2 l/min. Tolera la dieta. Refiere tos con expectoración amarillenta.', turno: 'M', tipo: 'evolucion' }, at(1, '10:00')],
     ['escala', { scale: 'barthel', items: { comer: 10, lavarse: 5, vestirse: 5, arreglarse: 5, deposicion: 10, miccion: 10, retrete: 5, traslado: 10, deambulacion: 10, escaleras: 5 } }, at(1, '11:00')],
   ];

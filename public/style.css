@@ -209,3 +209,12 @@ tr.locked { opacity: .65; cursor: default; }
 /* selectores dentro de una fila: ancho propio, no el 100 % */
 .row select { width: auto; max-width: 100%; }
 label.row { margin: 0; }
+/* ficha: los textos largos ocupan todo el ancho, los datos cortos van en rejilla compacta */
+dl.ficha { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+dl.ficha .long { grid-column: 1 / -1; } dl.ficha .long dd { max-width: 110ch; }
+/* gráfica de balance hídrico */
+.bc-scroll { overflow-x: auto; } svg.bc { min-width: 320px; height: auto; }
+svg.bc .b-in { fill: var(--acc); } svg.bc .b-diu { fill: #2f9e8f; } svg.bc .b-out { fill: #b3a9c8; }
+svg.bc .net { font-weight: 700; } svg.bc .net.neg { fill: #a12; }
+.sw-key { display: inline-flex; align-items: center; gap: 6px; font-size: .9rem; } .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
+.sw.b-in { background: var(--acc); } .sw.b-diu { background: #2f9e8f; } .sw.b-out { background: #b3a9c8; }
