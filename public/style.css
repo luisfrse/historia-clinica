@@ -206,3 +206,6 @@ tr.locked { opacity: .65; cursor: default; }
 .hp-faq details { border-top: 1px solid var(--line); padding: 6px 0; } .hp-faq summary { cursor: pointer; font-weight: 600; } .hp-faq p { margin: 6px 0 2px; max-width: 80ch; }
 .hp-nav { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 14px; }
 @media print { .hp-nav, .pg-title .row { display: none !important; } .hp-img { max-width: 80%; break-inside: avoid; } .hp-box, .hp-step { break-inside: avoid; } }
+/* selectores dentro de una fila: ancho propio, no el 100 % */
+.row select { width: auto; max-width: 100%; }
+label.row { margin: 0; }
