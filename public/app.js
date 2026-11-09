@@ -76,7 +76,7 @@
   /* ---------- barra de aplicación ---------- */
   function renderTop() {
     clear(top);
-    add(top, h('span', { class: 'brand' }, h('img', { src: '/favicon-32.png', alt: '' }), t('app')));
+    add(top, h('span', { class: 'brand' }, h('img', { src: '/favicon-32.png', alt: '' }), h('span', { class: 'bt' }, t('app'))));
     if (ME) {
       const seg = location.hash.replace(/^#\/?/, '').split('/')[0];
       const cur = seg === 'students' || seg === 'catalog' || seg === 'audit' || seg === 'grades' ? seg : 'home';
@@ -85,7 +85,8 @@
       add(top, h('span', { class: 'who' }, ME.name));
     } else add(top, h('nav'));
     add(top, h('button', { class: 'tb', 'aria-label': t('lang'), onclick: () => { LANG = LANG === 'es' ? 'ca' : 'es'; document.documentElement.lang = LANG; if (ME) api('PUT', '/api/me', { lang: LANG }).catch(() => {}); renderTop(); ME ? route() : renderLogin(); } }, LANG === 'es' ? 'CA' : 'ES'));
-    if (ME && ME.preview) add(top, h('button', { class: 'tb warn', onclick: async () => { try { await api('POST', '/api/preview/exit'); await boot(); location.hash = '#/'; } catch (e) { fail(e); } } }, t('prev_exit')));
+    const pb = document.getElementById('prevbar'); if (pb) pb.remove();
+    if (ME && ME.preview) top.after(h('div', { id: 'prevbar', class: 'prevbar', role: 'status' }, h('span', null, t('prev_ro')), h('button', { class: 'sm', onclick: async () => { try { await api('POST', '/api/preview/exit'); await boot(); location.hash = '#/'; } catch (e) { fail(e); } } }, t('prev_exit'))));
     if (ME) add(top, h('button', { class: 'tb', onclick: async () => { await api('POST', '/api/logout').catch(() => {}); ME = null; renderLogin(); } }, t('logout')));
   }
 
@@ -389,7 +390,7 @@
     const toolbar = !staff && open ? h('div', { class: 'toolbar row' }, h('b', null, t('tb_record') + ':'), ['nota', 'constantes', 'balance', 'cuidado'].map((ty) => h('button', { class: 'pri sm', onclick: () => openForm(ty) }, '+ ' + t('r_' + ty))), h('button', { class: 'sm', onclick: () => { location.hash = base + '/imprimir'; } }, t('print')))
       : staff ? h('div', { class: 'toolbar row' }, window.HCX.dayControl(id, c.chart.day, refresh), window.HCX.previewControl(id), c.members.length > 1 ? h('label', { class: 'row' }, t('filter_student') + ':', h('select', { onchange: (e) => { chartUser = e.target.value; refresh(); } }, h('option', { value: '' }, t('all_students')), c.members.map((m) => h('option', { value: m.id, selected: String(m.id) === String(chartUser) }, m.name)))) : null, h('button', { class: 'sm', onclick: () => { location.hash = base + '/imprimir'; } }, t('print'))) : null;
     const right = [h('span', { class: 'chip' }, c.chart.kind === 'team' ? t('team') + ': ' + c.chart.name : t('individual')), stateChip(open), c.chart.role ? h('span', { class: 'chip gry' }, t('p_' + c.chart.role)) : null];
-    show(h('div', { class: 'pg-title' }, h('button', { class: 'link', onclick: () => { history.length > 1 ? history.back() : (location.hash = '#/'); } }, t('back')), h('span', { class: 'mut' }, t('members') + ': ' + c.members.map((m) => m.name).join(', '))),
+    show(h('div', { class: 'pg-title' }, h('button', { class: 'link', onclick: () => { history.length > 1 ? history.back() : (location.hash = '#/'); } }, t('back')), c.members.length ? h('span', { class: 'mut' }, t('members') + ': ' + c.members.map((m) => m.name).join(', ')) : null),
       banner(c.patient, right), tabBar(tabs, tab, base), !open && !staff ? h('div', { class: 'panel warn' }, h('div', { class: 'pb' }, t('chart_closed'))) : null, toolbar, formBox, body);
   }
 

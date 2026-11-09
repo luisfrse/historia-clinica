@@ -34,3 +34,11 @@ test('importar en catalán: la plantilla sin tocar no da errores y «Cap» es si
   assert.strictEqual(r3.patient.sexo, 'M'); assert.strictEqual(r3.patient.grupo_sanguineo, '0+');
   assert.strictEqual(r3.orders[0].start_day, 2); assert.strictEqual(r3.orders[0].end_day, null); assert.strictEqual(r3.events[0].kind, 'prueba');
 });
+
+test('importar: el ejemplo en catalán y en castellano rellenan los mismos campos, sin pegarse unos a otros', () => {
+  const ca = IMP.parse(IMP.EXAMPLES.ca, '2025-03-12').patient, es = IMP.parse(IMP.EXAMPLES.es, '2025-03-12').patient;
+  assert.deepStrictEqual(Object.keys(ca).sort(), Object.keys(es).sort());
+  assert.strictEqual(ca.unidad, 'Medicina Interna'); assert.strictEqual(ca.habitacion, '214'); assert.strictEqual(ca.cama, 'B');
+  assert.strictEqual(es.unidad, 'Medicina Interna'); assert.strictEqual(es.habitacion, '214');
+  for (const k of ['unidad', 'habitacion', 'cama', 'nhc', 'procedencia', 'dieta', 'aislamiento']) assert.ok(!/\n|:/.test(ca[k]), k + ' no arrastra otras líneas');
+});
