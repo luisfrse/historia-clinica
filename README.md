@@ -69,7 +69,6 @@ npm start       # http://localhost:3000 (usa ADMIN_PASSWORD=... para entrar sin 
 - **Profesorado adicional**: solo la administración lo da de alta (Alumnado → Profesorado) con correo y contraseña propios; entra desde el inicio de sesión rellenando el correo. No se puede ascender a alumnado.
 - **Evaluación**: rúbrica editable (criterios 0–4 con peso), nota 0–10 por alumno y caso, publicada o no al alumnado, exportación CSV y botón **Enviar al Campus** (pestaña Notas): elige asignatura, categoría (teoría, prácticas o seguimiento, obligatoria), unidad (RA) y peso, y crea en el Campus una prueba oculta con la nota de cada alumno con nota publicada. Reenviar actualiza la misma prueba sin tocar la categoría/unidad/peso ni las notas editadas a mano en el Campus. Las unidades se cargan con "Sincronizar" en Usuarios.
 - **Impresión**: la historia completa se imprime o se guarda en PDF desde el navegador.
-- **Profesorado adicional**: la administración puede dar acceso de profesorado a cualquier usuario desde Alumnado.
 
 ## Pendiente
 
