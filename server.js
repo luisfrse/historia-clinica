@@ -613,6 +613,32 @@ R('GET', '/api/reports.zip', async (req, res, ctx) => {
   res.writeHead(200, hdrs({ 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="informes-alumnado.zip"', 'Content-Length': buf.length, 'Cache-Control': 'no-store' })); res.end(buf);
 }, { staff: true });
 
+/* --- eliminar un caso completo (paciente y todo lo que cuelga de él) --- */
+function patientCounts(pid) {
+  const q = (sql) => db.get(sql, pid).n;
+  return {
+    charts: q('SELECT COUNT(*) n FROM charts WHERE patient_id = ?'),
+    records: q('SELECT COUNT(*) n FROM records WHERE chart_id IN (SELECT id FROM charts WHERE patient_id = ?)'),
+    comments: q('SELECT COUNT(*) n FROM comments WHERE chart_id IN (SELECT id FROM charts WHERE patient_id = ?)'),
+    grades: q('SELECT COUNT(*) n FROM grades WHERE chart_id IN (SELECT id FROM charts WHERE patient_id = ?)'),
+    orders: q('SELECT COUNT(*) n FROM orders WHERE patient_id = ?'),
+    events: q('SELECT COUNT(*) n FROM events WHERE patient_id = ?'),
+    consignas: q('SELECT COUNT(*) n FROM consignas WHERE patient_id = ?'),
+  };
+}
+R('GET', '/api/patients/:id/delete-info', async (req, res, ctx) => {
+  const p = db.get('SELECT id FROM patients WHERE id = ?', intId(ctx.params.id)); if (!p) return bad(res, 'notfound', 404);
+  json(res, 200, patientCounts(p.id));
+}, { staff: true });
+R('POST', '/api/patients/:id/delete', async (req, res, ctx) => {
+  const p = db.get('SELECT * FROM patients WHERE id = ?', intId(ctx.params.id)); if (!p) return bad(res, 'notfound', 404);
+  const b = await readJson(req, 2e3); if (!/^(borrar|esborrar)$/i.test(String(b.confirm || '').trim())) return bad(res, 'confirm');
+  const n = patientCounts(p.id), nm = patName(p.data);
+  db.tx(() => { db.run('DELETE FROM patients WHERE id = ?', p.id); }); /* charts, records, comments, grades, orders, events, consignas y revisiones caen en cascada */
+  audit(ctx.user.email, 'caso-eliminado', p.code + ' ' + nm + ': ' + n.charts + ' historias, ' + n.records + ' registros, ' + n.grades + ' notas');
+  json(res, 200, { ok: true, deleted: n });
+}, { staff: true });
+
 /* --- borrar los datos introducidos por el alumnado (fin de curso o cuando se quiera) --- */
 function cleanupTargets(scope, id) {
   if (scope === 'student') { const u = studentOr404(id); if (!u) return null; return { user: u, chartIds: db.all('SELECT chart_id FROM chart_members WHERE user_id = ?', u.id).map((r) => r.chart_id) }; }

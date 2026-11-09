@@ -284,3 +284,30 @@ test('importar tareas con día: «| 2» o «| día 2» al final de la línea', (
   assert.deepStrictEqual(r.consignas[0].tasks.map((t) => [t.kind, t.min, t.day || 0, t.text]), [['constantes', 2, 1, 'Toma de constantes'], ['nota', 1, 3, 'Nota con | barra'], ['plan', 1, 0, 'Sin día']]);
   for (const lang of ['es', 'ca']) { const e = IMPL.parse(IMPL.EXAMPLES[lang], '2025-01-01'); assert.deepStrictEqual(e.consignas[1].tasks.map((t) => t.day), [4, 4, 5, 5], lang); assert.deepStrictEqual(e.errors, []); }
 });
+
+test('eliminar un caso completo: con confirmación, solo profesorado y sin dejar nada colgando', async () => {
+  const admin = await sso({ email: 'admin@campus.local', name: 'Admin', admin: true });
+  const alum = await sso({ email: 'j@x.com', name: 'Joan' });
+  const ex = await call('POST', '/api/import/example', { lang: 'ca' }, admin), pid = ex.json.id;
+  const ub = (await call('GET', '/api/users', null, admin)).json.users.find((u) => u.email === 'j@x.com');
+  await call('POST', '/api/patients/' + pid + '/assign', { mode: 'individual', user_ids: [ub.id] }, admin);
+  const cid = (await call('GET', '/api/my/charts', null, alum)).json.charts.find((c) => c.name === 'Joan').id;
+  await call('POST', '/api/charts/' + cid + '/records', { type: 'nota', data: { texto: 'Una nota de Joan para el caso.' } }, alum);
+  await call('PUT', '/api/charts/' + cid + '/grades/' + ub.id, { scores: { valoracion: 3 }, published: true }, admin);
+  const info = (await call('GET', '/api/patients/' + pid + '/delete-info', null, admin)).json;
+  assert.ok(info.charts >= 2 && info.records > 5 && info.orders === 6 && info.events === 7 && info.consignas === 2 && info.grades === 1, JSON.stringify(info));
+  assert.strictEqual((await call('GET', '/api/patients/' + pid + '/delete-info', null, alum)).status, 403);
+  assert.strictEqual((await call('POST', '/api/patients/' + pid + '/delete', { confirm: 'BORRAR' }, alum)).status, 403, 'el alumnado no puede');
+  assert.strictEqual((await call('POST', '/api/patients/' + pid + '/delete', {}, admin)).status, 400, 'sin confirmar no borra');
+  assert.strictEqual((await call('POST', '/api/patients/' + pid + '/delete', { confirm: 'quizás' }, admin)).status, 400);
+  assert.strictEqual((await call('GET', '/api/patients/' + pid, null, admin)).status, 200, 'sigue ahí');
+  const del = await call('POST', '/api/patients/' + pid + '/delete', { confirm: 'esborrar' }, admin); assert.strictEqual(del.status, 200); assert.strictEqual(del.json.deleted.grades, 1);
+  assert.strictEqual((await call('GET', '/api/patients/' + pid, null, admin)).status, 404);
+  assert.strictEqual((await call('GET', '/api/charts/' + cid, null, admin)).status, 404, 'sus historias también');
+  assert.strictEqual((await call('GET', '/api/my/charts', null, alum)).json.charts.length, 0);
+  assert.ok(!(await call('GET', '/api/patients', null, admin)).json.patients.some((p) => p.id === pid));
+  const { db } = require('../server');
+  for (const [t, col] of [['orders', 'patient_id'], ['events', 'patient_id'], ['consignas', 'patient_id'], ['charts', 'patient_id'], ['patient_revisions', 'patient_id']]) assert.strictEqual(db.get('SELECT COUNT(*) n FROM ' + t + ' WHERE ' + col + ' = ?', pid).n, 0, t);
+  assert.strictEqual(db.get('SELECT COUNT(*) n FROM records WHERE chart_id = ?', cid).n, 0); assert.strictEqual(db.get('SELECT COUNT(*) n FROM grades WHERE chart_id = ?', cid).n, 0);
+  assert.strictEqual((await call('POST', '/api/patients/' + pid + '/delete', { confirm: 'BORRAR' }, admin)).status, 404, 'ya no existe');
+});

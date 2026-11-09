@@ -202,6 +202,7 @@ window.HC_HELP = {
             ['✓', 'Descarga antes los informes (ZIP) si los necesitas: <b>no se puede deshacer</b>. Las notas ya enviadas al Campus no se borran allí.'],
             ['✓', '<b>Auditoría:</b> cada acción importante (altas, notas, borrados, envíos) queda registrada con quién y cuándo.'],
             ['✓', '<b>Archivar</b> un paciente lo oculta del trabajo sin perder nada.'],
+            ['✓', '<b>Eliminar un caso por completo:</b> pestaña Ficha, al final, «Eliminar este caso». Muestra lo que se borrará (historias, registros, notas, prescripciones, consignas…) y pide escribir BORRAR. No se puede deshacer.'],
           ]],
         ]],
         ['13 · Catálogo de cuidados', [
@@ -423,6 +424,7 @@ window.HC_HELP = {
             ['✓', "Descarrega abans els informes (ZIP) si els necessites: <b>no es pot desfer</b>. Les notes ja enviades al Campus no s'hi esborren."],
             ['✓', "<b>Auditoria:</b> cada acció important (altes, notes, esborrats, enviaments) queda registrada amb qui i quan."],
             ['✓', "<b>Arxivar</b> un pacient l'amaga del treball sense perdre res."],
+            ['✓', "<b>Eliminar un cas per complet:</b> pestanya Fitxa, al final, «Eliminar aquest cas». Mostra el que s'esborrarà (històries, registres, notes, prescripcions, consignes…) i demana escriure ESBORRAR. No es pot desfer."],
           ]],
         ]],
         ['13 · Catàleg de cures', [
