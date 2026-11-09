@@ -10,7 +10,7 @@
     f_age: 'Edad', age_years: 'años', b_dob: 'F. nacimiento', b_loc: 'Ubicación', allergies: 'Alergias', allergies_none: 'Sin alergias conocidas', allergies_unk: 'Alergias no registradas',
     p_admission: 'Datos del ingreso', p_last_vitals: 'Últimas constantes', p_last_note: 'Última nota de evolución', worklist: 'Lista de pacientes', no_data: 'Sin datos todavía.',
     fl_param: 'Parámetro', fl_legend: 'Fuera de rango (adulto, orientativo): ▲ alto, ▼ bajo.', fl_voided: 'Anulado', bal_day: 'Día', bal_in: 'Entradas (ml)', bal_out: 'Salidas (ml)', bal_net: 'Balance (ml)', ask_ok: 'Aceptar', today_rec: 'Registrar ahora',
-    tb_record: 'Registrar', comments_by: 'Comentario de', open_it: 'Abrir', teacher_only: 'Solo profesorado: el alumnado no ve este apartado',
+    nav_help: 'Ayuda', tb_record: 'Registrar', comments_by: 'Comentario de', open_it: 'Abrir', teacher_only: 'Solo profesorado: el alumnado no ve este apartado',
   });
   Object.assign(window.I18N.ca, {
     col_patient: 'Pacient', col_age: 'Edat / sexe', col_loc: 'Unitat / llit', col_dx: 'Diagnòstic', col_chart: 'Història', col_mine: 'Els meus registres', col_state: 'Estat', col_students: 'Històries', col_records: 'Registres', col_author: 'Autor', col_time: 'Data i hora', col_detail: 'Detall', col_result: 'Resultat', col_actions: 'Accions', col_last: 'Últim registre', col_type: 'Tipus', col_members: 'Membres', col_id: 'Codi',
@@ -18,7 +18,7 @@
     f_age: 'Edat', age_years: 'anys', b_dob: 'D. naixement', b_loc: 'Ubicació', allergies: 'Al·lèrgies', allergies_none: 'Sense al·lèrgies conegudes', allergies_unk: 'Al·lèrgies no registrades',
     p_admission: "Dades de l'ingrés", p_last_vitals: 'Últimes constants', p_last_note: "Última nota d'evolució", worklist: 'Llista de pacients', no_data: 'Sense dades encara.',
     fl_param: 'Paràmetre', fl_legend: 'Fora de rang (adult, orientatiu): ▲ alt, ▼ baix.', fl_voided: 'Anul·lat', bal_day: 'Dia', bal_in: 'Entrades (ml)', bal_out: 'Sortides (ml)', bal_net: 'Balanç (ml)', ask_ok: 'Acceptar', today_rec: 'Registrar ara',
-    tb_record: 'Registrar', comments_by: 'Comentari de', open_it: 'Obrir', teacher_only: "Només professorat: l'alumnat no veu aquest apartat",
+    nav_help: 'Ajuda', tb_record: 'Registrar', comments_by: 'Comentari de', open_it: 'Obrir', teacher_only: "Només professorat: l'alumnat no veu aquest apartat",
   });
   const t = (k) => (window.I18N[LANG] && window.I18N[LANG][k]) || window.I18N.es[k] || k;
 
@@ -79,8 +79,8 @@
     add(top, h('span', { class: 'brand' }, h('img', { src: '/favicon-32.png', alt: '' }), h('span', { class: 'bt' }, t('app'))));
     if (ME) {
       const seg = location.hash.replace(/^#\/?/, '').split('/')[0];
-      const cur = seg === 'students' || seg === 'catalog' || seg === 'audit' || seg === 'grades' ? seg : 'home';
-      const items = ME.staff ? [['home', '#/', 'nav_patients'], ['students', '#/students', 'nav_students'], ['catalog', '#/catalog', 'nav_catalog'], ['grades', '#/grades', 'nav_grades'], ['audit', '#/audit', 'nav_audit']] : [['home', '#/', 'nav_mine']];
+      const cur = seg === 'students' || seg === 'catalog' || seg === 'audit' || seg === 'grades' || seg === 'help' ? seg : 'home';
+      const items = ME.staff ? [['home', '#/', 'nav_patients'], ['students', '#/students', 'nav_students'], ['catalog', '#/catalog', 'nav_catalog'], ['grades', '#/grades', 'nav_grades'], ['audit', '#/audit', 'nav_audit'], ['help', '#/help', 'nav_help']] : [['home', '#/', 'nav_mine'], ['help', '#/help', 'nav_help']];
       add(top, h('nav', { 'aria-label': 'Principal' }, items.map(([k, href, l]) => h('button', { class: cur === k ? 'on' : '', onclick: () => { location.hash = href; } }, t(l)))));
       add(top, h('span', { class: 'who' }, ME.name));
     } else add(top, h('nav'));
@@ -410,6 +410,7 @@
     renderTop();
     const [a, b, c] = location.hash.replace(/^#\/?/, '').split('/');
     try {
+      if (a === 'help') return window.HCX.viewHelp(ME.staff && b !== 'student' ? 'teacher' : 'student');
       if (a === 'go' && c) {
         if (b === 'chart') { location.replace('#/chart/' + parseInt(c, 10)); return; }
         if (b === 'consigna' && !ME.staff) { const { charts } = await api('GET', '/api/my/charts'); const m = charts.find((x) => String(x.consigna_id) === c && x.window !== 'scheduled'); if (m) { location.replace('#/chart/' + m.id); return; } toast(t('go_none'), true); }

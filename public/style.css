@@ -194,3 +194,15 @@ tr.locked { opacity: .65; cursor: default; }
 .chip.tag { background: var(--acc-soft); color: var(--acc); } .chip.tag .link { padding: 0 2px; min-height: 0; text-decoration: none; }
 .tags { display: flex; flex-wrap: wrap; gap: 4px; }
 .toolbar.row input[type=search] { max-width: 320px; }
+/* ayuda */
+.hp-lead { font-size: 1.05rem; max-width: 72ch; }
+.hp-leg { list-style: none; margin: 6px 0 10px; padding: 0; } .hp-leg li { display: flex; gap: 10px; padding: 5px 0; border-top: 1px dotted var(--line); max-width: 82ch; } .hp-leg li:first-child { border-top: 0; }
+.hp-n { flex: 0 0 1.4em; font-weight: 700; color: var(--acc); text-align: center; }
+.hp-box { border-left: 4px solid var(--lilac); background: var(--acc-soft); padding: 8px 12px; border-radius: var(--rs); margin: 8px 0; max-width: 82ch; }
+.hp-box.warn { border-color: #e6a100; background: #fff4d6; color: #5c3a00; }
+.hp-flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 10px 0; }
+.hp-step { display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--line); border-radius: var(--r); padding: 8px 10px; background: var(--panel); } .hp-step span { color: var(--mut); font-size: .9rem; } .hp-big { font-size: 1.5rem; color: var(--acc); }
+.hp-img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: var(--r); margin: 10px 0; }
+.hp-faq details { border-top: 1px solid var(--line); padding: 6px 0; } .hp-faq summary { cursor: pointer; font-weight: 600; } .hp-faq p { margin: 6px 0 2px; max-width: 80ch; }
+.hp-nav { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 14px; }
+@media print { .hp-nav, .pg-title .row { display: none !important; } .hp-img { max-width: 80%; break-inside: avoid; } .hp-box, .hp-step { break-inside: avoid; } }

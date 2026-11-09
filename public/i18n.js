@@ -32,7 +32,7 @@ window.I18N = {
     audit_help: 'Últimos 300 eventos de acceso y gestión.', err: 'No se pudo completar la acción.', confirm_archive: '¿Archivar este paciente? Las historias dejan de aparecer al alumnado.', revisions: 'revisiones anteriores guardadas', ok: 'Hecho',
   },
   ca: {
-    login_title: 'Accés', login_campus: 'Entra des del Campus: la sessió es reconeix automàticament.', login_btn: 'Anar al Campus', admin_pw: "Contrasenya d'administració", enter: 'Entrar', logout: 'Sortir', lang: 'Idioma', back: '‹ Tornar', save: 'Desar', cancel: 'Cancel·lar', close: 'Tancar', edit: 'Editar', archive: 'Arxivar', restore: 'Restaurar', delete: 'Eliminar',
+    app: 'Història clínica', login_title: 'Accés', login_campus: 'Entra des del Campus: la sessió es reconeix automàticament.', login_btn: 'Anar al Campus', admin_pw: "Contrasenya d'administració", enter: 'Entrar', logout: 'Sortir', lang: 'Idioma', back: '‹ Tornar', save: 'Desar', cancel: 'Cancel·lar', close: 'Tancar', edit: 'Editar', archive: 'Arxivar', restore: 'Restaurar', delete: 'Eliminar',
     nav_patients: 'Pacients', nav_students: 'Alumnat', nav_catalog: 'Catàleg de cures', nav_audit: 'Auditoria', nav_mine: 'Els meus pacients',
     mine_empty: 'Encara no tens pacients assignats.', mine_intro: 'Pacients assignats. Només veus la teva història de treball: el que registris tu (o el teu equip).',
     new_patient: 'Nou pacient', patients_empty: 'Encara no hi ha pacients. Crea el primer.', charts: 'històries', charts_title: 'Històries de treball', subject: 'Assignatura', no_subject: 'Sense assignatura', records: 'registres', archived: 'Arxivat', team: 'Equip', individual: 'Individual',
