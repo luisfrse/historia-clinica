@@ -214,11 +214,13 @@
       h('div', { class: 'pb' }, h('dl', { class: 'ficha' }, [['inf_summary', r.data.resumen], ['inf_state', r.data.estado], ['inf_reco', r.data.recomendaciones]].filter((x) => x[1]).map(([k, v]) => h('div', null, h('dt', null, t(k)), h('dd', null, v)))), X.voidInfo(r), X.cmts(r), h('div', { class: 'row' }, X.actions(r))))) : panel(null, empty(t('no_records')))];
   }
 
+  /* tarjeta de prueba o evento: tipo con color + título a la izquierda, acciones a la derecha */
+  const evCard = (e, o) => h('div', { class: 'ev ev-' + e.kind + (o.faded ? ' faded' : '') }, h('div', { class: 'ev-h' }, h('span', { class: 'ev-kind' }, t('ev_' + e.kind)), h('b', { class: 'ev-t' }, e.title), o.actions || null), e.body ? h('div', { class: 'ev-b' }, e.body) : null);
   function eventList(events, dayNow, staff) {
     if (!events.length) return panel(null, empty(t('ev_none')));
     const days = [...new Set(events.map((e) => e.day))];
     return h('div', { class: 'tl' }, days.map((d) => h('div', { class: 'tl-day' }, h('div', { class: 'tl-h' }, t('ev_day') + ' ' + d, staff && d > dayNow ? h('span', { class: 'chip amb' }, t('ev_future') + ' ' + d) : null),
-      events.filter((e) => e.day === d).map((e) => h('div', { class: 'panel' + (staff && e.day > dayNow ? ' faded' : '') }, h('div', { class: 'ph' }, e.title, h('span', { class: 'chip ' + (e.kind === 'prueba' ? '' : 'gry') }, t('ev_' + e.kind))), e.body ? h('div', { class: 'pb body' }, e.body) : null)))));
+      events.filter((e) => e.day === d).map((e) => evCard(e, { faded: staff && e.day > dayNow })))));
   }
   const tabPruebas = (X) => [h('div', { class: 'toolbar row' }, h('b', null, t('ev_title')), X.staff ? dayControl(X.id, X.c.chart.day, X.refresh) : h('span', { class: 'mut' }, t('day_case') + ' ' + X.c.chart.day)), eventList(X.c.events, X.c.chart.day, X.staff)];
 
@@ -340,7 +342,7 @@
     const kind = sel([['prueba', t('ev_prueba')], ['evento', t('ev_evento')]], 'prueba'), day = h('input', { type: 'text', inputmode: 'numeric', value: '1' }), title = h('input', { type: 'text' }), body = h('textarea');
     const add1 = h('details', { class: 'panel', open: !plan.events.length }, h('summary', null, t('ev_add')), h('div', { class: 'pb' }, h('div', { class: 'cols' }, field(t('tipo'), kind), field(t('ev_day'), day), field(t('ev_title_f'), title)), field(t('ev_body'), body), h('p', null, h('button', { class: 'pri', onclick: async () => { try { await api('POST', '/api/patients/' + X.id + '/events', { kind: kind.value, day: day.value, title: title.value, body: body.value }); refresh(); } catch (e) { fail(e); } } }, t('save')))));
     return [h('p', { class: 'mut' }, t('ev_hint')), add1, h('div', { class: 'tl' }, [...new Set(plan.events.map((e) => e.day))].map((d) => h('div', { class: 'tl-day' }, h('div', { class: 'tl-h' }, t('ev_day') + ' ' + d),
-      plan.events.filter((e) => e.day === d).map((e) => h('div', { class: 'panel' }, h('div', { class: 'ph' }, e.title, h('span', { class: 'chip' }, t('ev_' + e.kind)), h('button', { class: 'sm danger', onclick: async () => { try { await api('DELETE', '/api/events/' + e.id); refresh(); } catch (er) { fail(er); } } }, t('delete'))), e.body ? h('div', { class: 'pb body' }, e.body) : null)))))];
+      plan.events.filter((e) => e.day === d).map((e) => evCard(e, { actions: h('button', { class: 'sm danger', onclick: async () => { try { await api('DELETE', '/api/events/' + e.id); refresh(); } catch (er) { fail(er); } } }, t('delete')) })))))];
   }
 
   /* ---------- impresión de la historia completa ---------- */
