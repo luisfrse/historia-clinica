@@ -226,3 +226,5 @@ svg.bc .net { font-weight: 700; } svg.bc .net.neg { fill: #a12; }
 .ev-kind { font-size: .8rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; background: var(--acc-soft); color: var(--acc); white-space: nowrap; }
 .ev-evento .ev-kind { background: #fff1d6; color: #7a4d00; }
 .ev-b { margin-top: 4px; white-space: pre-wrap; max-width: 90ch; }
+/* ritmo por días */
+.daybar .pb { gap: 12px; } .daybar { border-left: 4px solid var(--lilac); }

@@ -38,6 +38,7 @@ window.HC_HELP = {
           ['leg', [
             ['✓', 'Las tareas con <b>✓</b> se marcan solas cuando haces el registro que piden (por ejemplo, dos tomas de constantes). No hay que avisar a nadie.'],
             ['✓', 'Las tareas con <b>•</b> («libres») no se comprueban solas: las valorará tu profesor.'],
+            ['✓', 'Si una tarea lleva una etiqueta <b>Día 2</b>, hay que hacerla ese día; la del día en que estás aparece resaltada.'],
             ['✓', 'Puedes plegar la consigna con la flecha para ganar espacio.'],
           ]],
         ]],
@@ -51,7 +52,14 @@ window.HC_HELP = {
             ['•', '<b>Pruebas y evolución:</b> resultados y sucesos que ocurren en el caso.'],
             ['•', '<b>Ficha:</b> todos los datos del paciente.'],
           ]],
-          ['box', 'tip', '<b>El «día del caso».</b> El caso avanza por días: tu profesor va liberando pruebas, sucesos y prescripciones. Si algo no aparece todavía, es que aún no toca.'],
+          ['box', 'tip', '<b>El «día del caso».</b> El caso avanza por días y cada día trae pruebas, sucesos y prescripciones nuevos. Según cómo lo haya preparado tu profesor, <b>él</b> va liberando los días o <b>tú</b> avanzas por días (ver abajo). Si algo no aparece todavía, es que aún no toca.'],
+          ['h2', 'Si trabajas por días'],
+          ['leg', [
+            ['✓', 'Arriba de la historia verás <b>«Día 2 de 5»</b> y el botón <b>«Terminar el día 2»</b>. Registra lo de ese día y pulsa el botón cuando acabes.'],
+            ['✓', 'Al pulsar te avisamos de lo que te queda pendiente de ese día. Es solo un aviso: puedes seguir igualmente.'],
+            ['✓', 'Al pasar al día siguiente aparecen las pruebas, sucesos y prescripciones nuevos. <b>Los días terminados quedan cerrados</b>: puedes verlos, pero ya no añadir ni corregir registros. Solo tu profesor puede reabrirlos.'],
+            ['✓', 'La fecha de cada registro es la del día del caso: tú solo eliges la hora.'],
+          ]],
         ]],
         ['6 · Qué puedes registrar', [
           ['img', 's-form', 0.95],
@@ -86,6 +94,7 @@ window.HC_HELP = {
             ['La historia sale bloqueada con «Disponible desde…»', 'Es normal: se abrirá sola en esa fecha.'],
             ['No puedo registrar nada', 'Puede que la historia esté cerrada o finalizada (solo lectura), o que esa acción sea de enfermería y tu perfil sea TCAE.'],
             ['Me equivoqué en un valor', 'Usa «Anular» con el motivo y «Corregir» para escribir el correcto (sección 7).'],
+            ['No puedo corregir un registro de un día anterior', 'Si trabajas por días, los días terminados están cerrados. Pídele a tu profesor que reabra ese día.'],
             ['Me sale que mi acceso está desactivado', 'Pídele a tu profesor que lo reactive.'],
             ['Las cosas salen en otro idioma', 'Cambia el idioma con el botón CA / ES de la barra superior. Los datos del paciente están escritos en el idioma que eligió tu profesor.'],
           ]],
@@ -132,7 +141,7 @@ window.HC_HELP = {
           ['leg', [
             ['✓', '<b>Prescripciones</b> (pestaña del paciente): fármaco, dosis, vía, pauta, horas, desde/hasta qué día y «si precisa». El alumnado las administra en la hoja de medicación con los cinco correctos.'],
             ['✓', '<b>Línea temporal:</b> pruebas (analíticas, radiografías…) y eventos (fiebre, caída…) con el <b>día del caso</b> en que ocurren.'],
-            ['✓', '<b>Día del caso:</b> cada historia tiene un contador (− / +). El alumnado solo ve lo que ya toca por día; tú lo ves todo, con la marca «se libera el día N».'],
+            ['✓', '<b>Día del caso:</b> cada historia tiene un contador (− / +). El alumnado solo ve lo que ya toca por día; tú lo ves todo, con la marca «se libera el día N». Si prefieres que cada alumno avance a su ritmo, usa el <b>ritmo por días</b> (sección 7).'],
           ]],
         ]],
         ['6 · Consignas (actividades)', [
@@ -140,7 +149,7 @@ window.HC_HELP = {
           ['img', 't-consignas', 0.95],
           ['leg', [
             ['✓', 'Cada consigna tiene <b>título, enunciado</b>, fecha de entrega opcional y <b>tareas</b>.'],
-            ['✓', 'Cada tarea es de un <b>tipo</b> (nota, constantes, balance, cuidado, medicación, escala, valoración, plan, informe) con un mínimo de registros, y <b>se marca sola</b> cuando el alumno los hace. El tipo «libre» no se comprueba.'],
+            ['✓', 'Cada tarea es de un <b>tipo</b> (nota, constantes, balance, cuidado, medicación, escala, valoración, plan, informe) con un mínimo de registros, y <b>se marca sola</b> cuando el alumno los hace. El tipo «libre» no se comprueba. Cada tarea puede llevar un <b>día</b> (1, 2…): entonces solo cuentan los registros hechos ese día.'],
             ['✓', 'Al pie de cada consigna tienes un <b>enlace para el Campus</b> que lleva al alumno directamente a su historia de esa actividad: pégalo como material o en el enunciado de una tarea o cuestionario.'],
           ]],
         ]],
@@ -149,6 +158,8 @@ window.HC_HELP = {
           ['leg', [
             ['✓', 'Pestaña <b>Asignación</b>: elige el modo (<b>individual</b>, una historia por alumno, o <b>equipo</b>), la <b>consigna</b>, y marca al alumnado (filtra por asignatura o busca).'],
             ['✓', '<b>Disponible desde / Hasta:</b> programa el acceso (vacío = sin límite). Antes de la fecha el alumno ve la historia bloqueada; después del fin puede consultarla pero no registrar. Se puede cambiar luego en la propia historia.'],
+            ['✓', '<b>Ritmo:</b> «Lo marca el profesor» (tú mueves el día del caso; ideal en clase) o «Por días: lo marca el alumno» (cada alumno o equipo pulsa «Terminar el día N» y pasa al siguiente). Puedes fijar el <b>último día</b>; si no, es el de la última prueba o prescripción. Lo cambias después en el desplegable «Ritmo» de la historia.'],
+            ['✓', '<b>Días cerrados:</b> en el modo por días, los días terminados quedan cerrados para el alumno (ni añadir ni corregir). Para <b>reabrir un día</b>, retrocede el «Día del caso» con − en su historia: el alumno vuelve a ese día. En Seguimiento ves en qué día va cada uno.'],
             ['✓', '<b>Cerrar una historia</b> la deja en solo lectura cuando quieras (pestaña Historias del paciente).'],
           ]],
         ]],
@@ -199,6 +210,7 @@ window.HC_HELP = {
         ['14 · Preguntas frecuentes', [
           ['faq', [
             ['¿Puedo usar el mismo paciente en dos asignaturas?', 'Sí. Clasifícalo en las dos y crea una consigna para cada una; asigna cada consigna a su grupo.'],
+            ['Un alumno terminó un día por error', 'Retrocede el «Día del caso» con − en su historia: vuelve a ese día y puede corregir. Después avanzará de nuevo.'],
             ['¿Cómo hago un cuestionario sobre el caso?', 'Créalo en el Campus (cuestionarios) y pon en su enunciado o como material el enlace de la consigna: el alumno abre su historia con un clic.'],
             ['El alumno dice que no ve el caso', 'Comprueba que está asignado, que la fecha de inicio no es futura y que la historia no está cerrada. «Ver como alumno» te lo confirma.'],
             ['Cambié la asignatura de un alumno en el Campus', 'Pulsa «Sincronizar alumnado del Campus» en Alumnado.'],
@@ -247,6 +259,7 @@ window.HC_HELP = {
           ['leg', [
             ['✓', "Les tasques amb <b>✓</b> es marquen soles quan fas el registre que demanen (per exemple, dues preses de constants). No cal avisar ningú."],
             ['✓', "Les tasques amb <b>•</b> («lliures») no es comproven soles: les valorarà el teu professor."],
+            ['✓', "Si una tasca porta una etiqueta <b>Dia 2</b>, s'ha de fer aquell dia; la del dia en què ets apareix ressaltada."],
             ['✓', "Pots plegar la consigna amb la fletxa per guanyar espai."],
           ]],
         ]],
@@ -260,7 +273,14 @@ window.HC_HELP = {
             ['•', "<b>Proves i evolució:</b> resultats i successos que ocorren en el cas."],
             ['•', "<b>Fitxa:</b> totes les dades del pacient."],
           ]],
-          ['box', 'tip', "<b>El «dia del cas».</b> El cas avança per dies: el teu professor va alliberant proves, successos i prescripcions. Si alguna cosa encara no apareix, és que encara no toca."],
+          ['box', 'tip', "<b>El «dia del cas».</b> El cas avança per dies i cada dia porta proves, successos i prescripcions nous. Segons com l'hagi preparat el teu professor, <b>ell</b> va alliberant els dies o <b>tu</b> avances per dies (vegeu a sota). Si alguna cosa encara no apareix, és que encara no toca."],
+          ['h2', 'Si treballes per dies'],
+          ['leg', [
+            ['✓', "A dalt de la història veuràs <b>«Dia 2 de 5»</b> i el botó <b>«Acabar el dia 2»</b>. Registra el d'aquell dia i prem el botó quan acabis."],
+            ['✓', "En prémer-lo t'avisem del que et queda pendent d'aquell dia. És només un avís: pots continuar igualment."],
+            ['✓', "En passar al dia següent apareixen les proves, successos i prescripcions nous. <b>Els dies acabats queden tancats</b>: els pots veure, però ja no hi pots afegir ni corregir registres. Només el teu professor els pot reobrir."],
+            ['✓', "La data de cada registre és la del dia del cas: tu només tries l'hora."],
+          ]],
         ]],
         ['6 · Què pots registrar', [
           ['img', 's-form', 0.95],
@@ -295,6 +315,7 @@ window.HC_HELP = {
             ["La història surt bloquejada amb «Disponible des de…»", "És normal: s'obrirà sola en aquesta data."],
             ["No puc registrar res", "Pot ser que la història estigui tancada o finalitzada (només lectura), o que aquesta acció sigui d'infermeria i el teu perfil sigui TCAI."],
             ["M'he equivocat en un valor", "Fes servir «Anul·lar» amb el motiu i «Corregir» per escriure el correcte (secció 7)."],
+            ["No puc corregir un registre d'un dia anterior", "Si treballes per dies, els dies acabats estan tancats. Demana al teu professor que reobri aquell dia."],
             ["Em diu que el meu accés està desactivat", "Demana al teu professor que el reactivi."],
             ["Les coses surten en un altre idioma", "Canvia l'idioma amb el botó CA / ES de la barra superior. Les dades del pacient estan escrites en l'idioma que va triar el teu professor."],
           ]],
@@ -341,7 +362,7 @@ window.HC_HELP = {
           ['leg', [
             ['✓', "<b>Prescripcions</b> (pestanya del pacient): fàrmac, dosi, via, pauta, hores, des de/fins a quin dia i «si cal». L'alumnat les administra al full de medicació amb els cinc correctes."],
             ['✓', "<b>Línia temporal:</b> proves (analítiques, radiografies…) i esdeveniments (febre, caiguda…) amb el <b>dia del cas</b> en què ocorren."],
-            ['✓', "<b>Dia del cas:</b> cada història té un comptador (− / +). L'alumnat només veu el que ja toca per dia; tu ho veus tot, amb la marca «s'allibera el dia N»."],
+            ['✓', "<b>Dia del cas:</b> cada història té un comptador (− / +). L'alumnat només veu el que ja toca per dia; tu ho veus tot, amb la marca «s'allibera el dia N». Si prefereixes que cada alumne avanci al seu ritme, fes servir el <b>ritme per dies</b> (secció 7)."],
           ]],
         ]],
         ['6 · Consignes (activitats)', [
@@ -349,7 +370,7 @@ window.HC_HELP = {
           ['img', 't-consignas', 0.95],
           ['leg', [
             ['✓', "Cada consigna té <b>títol, enunciat</b>, data de lliurament opcional i <b>tasques</b>."],
-            ['✓', "Cada tasca és d'un <b>tipus</b> (nota, constants, balanç, cura, medicació, escala, valoració, pla, informe) amb un mínim de registres, i <b>es marca sola</b> quan l'alumne els fa. El tipus «lliure» no es comprova."],
+            ['✓', "Cada tasca és d'un <b>tipus</b> (nota, constants, balanç, cura, medicació, escala, valoració, pla, informe) amb un mínim de registres, i <b>es marca sola</b> quan l'alumne els fa. El tipus «lliure» no es comprova. Cada tasca pot portar un <b>dia</b> (1, 2…): llavors només compten els registres fets aquell dia."],
             ['✓', "Al peu de cada consigna tens un <b>enllaç per al Campus</b> que porta l'alumne directament a la seva història d'aquesta activitat: enganxa'l com a material o a l'enunciat d'una tasca o qüestionari."],
           ]],
         ]],
@@ -358,6 +379,8 @@ window.HC_HELP = {
           ['leg', [
             ['✓', "Pestanya <b>Assignació</b>: tria el mode (<b>individual</b>, una història per alumne, o <b>equip</b>), la <b>consigna</b>, i marca l'alumnat (filtra per assignatura o cerca)."],
             ['✓', "<b>Disponible des de / Fins a:</b> programa l'accés (buit = sense límit). Abans de la data l'alumne veu la història bloquejada; després del final la pot consultar però no registrar. Es pot canviar després a la mateixa història."],
+            ['✓', "<b>Ritme:</b> «El marca el professor» (tu mous el dia del cas; ideal a classe) o «Per dies: el marca l'alumne» (cada alumne o equip prem «Acabar el dia N» i passa al següent). Pots fixar el <b>darrer dia</b>; si no, és el de la darrera prova o prescripció. El canvies després al desplegable «Ritme» de la història."],
+            ['✓', "<b>Dies tancats:</b> en el mode per dies, els dies acabats queden tancats per a l'alumne (ni afegir ni corregir). Per <b>reobrir un dia</b>, retrocedeix el «Dia del cas» amb − a la seva història: l'alumne torna a aquell dia. A Seguiment veus en quin dia va cadascú."],
             ['✓', "<b>Tancar una història</b> la deixa en només lectura quan vulguis (pestanya Històries del pacient)."],
           ]],
         ]],
@@ -408,6 +431,7 @@ window.HC_HELP = {
         ['14 · Preguntes freqüents', [
           ['faq', [
             ["Puc fer servir el mateix pacient en dues assignatures?", "Sí. Classifica'l en les dues i crea una consigna per a cada una; assigna cada consigna al seu grup."],
+            ["Un alumne ha acabat un dia per error", "Retrocedeix el «Dia del cas» amb − a la seva història: torna a aquell dia i pot corregir. Després avançarà de nou."],
             ["Com faig un qüestionari sobre el cas?", "Crea'l al Campus (qüestionaris) i posa a l'enunciat o com a material l'enllaç de la consigna: l'alumne obre la seva història amb un clic."],
             ["L'alumne diu que no veu el cas", "Comprova que està assignat, que la data d'inici no és futura i que la història no està tancada. «Veure com a alumne» ho confirma."],
             ["He canviat l'assignatura d'un alumne al Campus", "Prem «Sincronitzar alumnat del Campus» a Alumnat."],

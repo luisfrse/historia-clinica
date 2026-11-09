@@ -94,7 +94,15 @@ function upsertUser(email, name, lang, subjects, role) {
 const todayLocal = () => U.nowLocal().slice(0, 10);
 function chartWindow(c) { const t = todayLocal(); if (c.opens && t < c.opens) return 'scheduled'; if (c.closes && t > c.closes) return 'ended'; return ''; }
 const effStatus = (c) => (chartWindow(c) === 'ended' ? 'closed' : c.status);
-function chartMeta(id) { const c = db.get('SELECT * FROM charts WHERE id = ?', id) || {}; return { status: effStatus(c), opens: c.opens || '', closes: c.closes || '', window: chartWindow(c), consigna_id: c.consigna_id || null }; }
+/* Ritmo del caso: 'teacher' = el profesor mueve el día; 'student' = cada alumno o equipo termina un día y pasa al siguiente.
+   En el modo por días la fecha de cada registro sale del día del caso (fecha de inicio + día − 1), de modo que la hoja de medicación, el balance
+   y las gráficas se agrupan por día del caso aunque el alumno haga varios días en una sola tarde. */
+const addDays = (iso, n) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const caseStart = (c) => c.start_date || String(c.created || '').slice(0, 10) || todayLocal();
+const caseDate = (c, day) => addDays(caseStart(c), (day || c.day || 1) - 1);
+function lastDay(pid) { const e = db.get('SELECT MAX(day) m FROM events WHERE patient_id = ?', pid), o = db.get('SELECT MAX(start_day) a, MAX(end_day) b FROM orders WHERE patient_id = ?', pid); return Math.max(1, e.m || 0, o.a || 0, o.b || 0); }
+const dayCap = (c) => Math.max(c.day || 1, c.max_day || lastDay(c.patient_id));
+function chartMeta(id) { const c = db.get('SELECT * FROM charts WHERE id = ?', id) || {}; return { status: effStatus(c), opens: c.opens || '', closes: c.closes || '', window: chartWindow(c), consigna_id: c.consigna_id || null, pace: c.pace || 'teacher', day: c.day || 1, cap: c.id ? dayCap(c) : 1, case_date: c.id ? caseDate(c) : '' }; }
 function windowFields(b) {
   const opens = b.opens ? String(b.opens) : '', closes = b.closes ? String(b.closes) : '';
   if ((opens && !U.validDate(opens)) || (closes && !U.validDate(closes))) return { error: 'fecha' };
@@ -119,7 +127,7 @@ const membersOf = (cid) => db.all('SELECT u.id, u.name, u.email, m.role FROM cha
 function recordsOf(cid, userFilter) {
   const rows = db.all('SELECT r.*, u.name author, v.name void_name FROM records r JOIN users u ON u.id = r.user_id LEFT JOIN users v ON v.id = r.void_by WHERE r.chart_id = ?' + (userFilter ? ' AND r.user_id = ' + (parseInt(userFilter, 10) || 0) : '') + ' ORDER BY r.occurred DESC, r.id DESC', cid);
   const com = db.all('SELECT c.id, c.record_id, c.text, c.created, u.name author FROM comments c JOIN users u ON u.id = c.user_id WHERE c.chart_id = ? ORDER BY c.id', cid);
-  return rows.map((r) => ({ id: r.id, user_id: r.user_id, author: r.author, author_role: r.author_role, type: r.type, data: JSON.parse(r.data), occurred: r.occurred, created: r.created, replaces_id: r.replaces_id, void_at: r.void_at, void_reason: r.void_reason, void_name: r.void_name, comments: com.filter((c) => c.record_id === r.id) }));
+  return rows.map((r) => ({ id: r.id, user_id: r.user_id, author: r.author, author_role: r.author_role, type: r.type, day: r.day, data: JSON.parse(r.data), occurred: r.occurred, created: r.created, replaces_id: r.replaces_id, void_at: r.void_at, void_reason: r.void_reason, void_name: r.void_name, comments: com.filter((c) => c.record_id === r.id) }));
 }
 const chartComments = (cid) => db.all('SELECT c.id, c.text, c.created, u.name author FROM comments c JOIN users u ON u.id = c.user_id WHERE c.chart_id = ? AND c.record_id IS NULL ORDER BY c.id', cid);
 const patientCard = (p, staff) => { const d = JSON.parse(p.data); return Object.assign({ id: p.id, code: p.code, archived: !!p.archived, created: p.created, updated: p.updated, data: staff ? d : PAT.forStudent(d) }, staff ? { subjects: JSON.parse(p.subjects || '[]'), topics: JSON.parse(p.topics || '[]') } : {}); };
@@ -274,17 +282,18 @@ R('POST', '/api/patients/:id/assign', async (req, res, ctx) => {
   if (!users.length) return bad(res, 'users');
   const out = { created: 0, skipped: 0 };
   const win = windowFields(b); if (win.error) return bad(res, win.error);
+  const pace = b.pace === 'student' ? 'student' : 'teacher', maxDay = b.max_day ? Math.min(60, intId(b.max_day)) || null : null, startD = todayLocal();
   const cons = b.consigna_id ? db.get('SELECT id FROM consignas WHERE id = ? AND patient_id = ?', intId(b.consigna_id), p.id) : null, cid = cons ? cons.id : null;
   db.tx(() => {
     if (b.mode === 'team') {
       const name = U.clip(b.team_name, 80) || 'Equipo';
-      const r = db.run("INSERT INTO charts (patient_id, kind, name, consigna_id, opens, closes, created) VALUES (?,'team',?,?,?,?,?)", p.id, name, cid, win.opens, win.closes, new Date().toISOString());
+      const r = db.run("INSERT INTO charts (patient_id, kind, name, consigna_id, opens, closes, pace, max_day, start_date, created) VALUES (?,'team',?,?,?,?,?,?,?,?)", p.id, name, cid, win.opens, win.closes, pace, maxDay, startD, new Date().toISOString());
       users.forEach((u) => db.run('INSERT INTO chart_members (chart_id, user_id, role) VALUES (?,?,?)', Number(r.lastInsertRowid), u.id, u.profile));
       out.created = 1;
     } else {
       for (const u of users) {
         if (db.get("SELECT 1 x FROM charts c JOIN chart_members m ON m.chart_id = c.id WHERE c.patient_id = ? AND m.user_id = ? AND c.kind = 'individual'", p.id, u.id)) { out.skipped++; continue; }
-        const r = db.run("INSERT INTO charts (patient_id, kind, name, consigna_id, opens, closes, created) VALUES (?,'individual',?,?,?,?,?)", p.id, u.name, cid, win.opens, win.closes, new Date().toISOString());
+        const r = db.run("INSERT INTO charts (patient_id, kind, name, consigna_id, opens, closes, pace, max_day, start_date, created) VALUES (?,'individual',?,?,?,?,?,?,?,?)", p.id, u.name, cid, win.opens, win.closes, pace, maxDay, startD, new Date().toISOString());
         db.run('INSERT INTO chart_members (chart_id, user_id, role) VALUES (?,?,?)', Number(r.lastInsertRowid), u.id, u.profile);
         out.created++;
       }
@@ -300,6 +309,8 @@ R('PUT', '/api/charts/:id', async (req, res, ctx) => {
   if (b.name != null) db.run('UPDATE charts SET name = ? WHERE id = ?', U.clip(b.name, 80) || c.name, c.id);
   if (b.consigna_id !== undefined) { const k = b.consigna_id ? db.get('SELECT id FROM consignas WHERE id = ? AND patient_id = ?', intId(b.consigna_id), c.patient_id) : null; if (b.consigna_id && !k) return bad(res, 'consigna'); db.run('UPDATE charts SET consigna_id = ? WHERE id = ?', k ? k.id : null, c.id); }
   if (b.opens !== undefined || b.closes !== undefined) { const w = windowFields({ opens: b.opens !== undefined ? b.opens : c.opens, closes: b.closes !== undefined ? b.closes : c.closes }); if (w.error) return bad(res, w.error); db.run('UPDATE charts SET opens = ?, closes = ? WHERE id = ?', w.opens, w.closes, c.id); }
+  if (b.pace === 'teacher' || b.pace === 'student') db.run('UPDATE charts SET pace = ? WHERE id = ?', b.pace, c.id);
+  if (b.max_day !== undefined) { const m = b.max_day === null || b.max_day === '' ? null : intId(b.max_day); if (m !== null && (!m || m > 60)) return bad(res, 'max_day'); db.run('UPDATE charts SET max_day = ? WHERE id = ?', m, c.id); }
   if (b.day != null) { const dd = intId(b.day); if (!dd || dd > 60) return bad(res, 'day'); db.run('UPDATE charts SET day = ? WHERE id = ?', dd, c.id); }
   audit(ctx.user.email, 'historia-edicion', '#' + c.id + ' ' + (b.status || '') + (b.day ? ' día ' + b.day : ''));
   json(res, 200, { ok: true });
@@ -390,7 +401,7 @@ R('GET', '/api/charts/:id', async (req, res, ctx) => {
   if (!a) { const c0 = db.get('SELECT * FROM charts WHERE id = ?', intId(ctx.params.id)); if (c0 && !isStaff(ctx.user) && chartWindow(c0) === 'scheduled' && db.get('SELECT 1 x FROM chart_members WHERE chart_id = ? AND user_id = ?', c0.id, ctx.user.id)) return json(res, 403, { error: 'scheduled', opens: c0.opens }); return bad(res, 'notfound', 404); }
   const p = db.get('SELECT * FROM patients WHERE id = ?', a.chart.patient_id);
   json(res, 200, {
-    chart: { id: a.chart.id, kind: a.chart.kind, name: a.chart.name, status: a.staff ? a.chart.status : effStatus(a.chart), opens: a.chart.opens || '', closes: a.chart.closes || '', window: chartWindow(a.chart), role: a.role, day: a.chart.day, consigna_id: a.chart.consigna_id || null }, patient: patientCard(p, a.staff),
+    chart: { id: a.chart.id, kind: a.chart.kind, name: a.chart.name, status: a.staff ? a.chart.status : effStatus(a.chart), opens: a.chart.opens || '', closes: a.chart.closes || '', window: chartWindow(a.chart), pace: a.chart.pace || 'teacher', max_day: a.chart.max_day || null, cap: dayCap(a.chart), case_date: caseDate(a.chart), role: a.role, day: a.chart.day, consigna_id: a.chart.consigna_id || null }, patient: patientCard(p, a.staff),
     consigna: consignaFor(a.chart), consignas: a.staff ? db.all('SELECT id, title FROM consignas WHERE patient_id = ? ORDER BY id', p.id) : [],
     orders: (a.staff ? db.all('SELECT * FROM orders WHERE patient_id = ? ORDER BY start_day, id', p.id) : visibleOrders(a.chart)).map(orderOut),
     events: (a.staff ? db.all('SELECT * FROM events WHERE patient_id = ? ORDER BY day, id', p.id) : visibleEvents(a.chart)).map(evOut),
@@ -406,19 +417,31 @@ R('POST', '/api/charts/:id/records', async (req, res, ctx) => {
   const b = await readJson(req, 2e5);
   if (!CAT.TYPES.includes(b.type)) return bad(res, 'tipo');
   let data; try { data = CAT.validate(b.type, b.data, { role: a.role, catalog: catalogGet, order: (id) => visibleOrders(a.chart).find((o) => o.id === id), record: (id, ty) => db.get('SELECT id FROM records WHERE id = ? AND chart_id = ? AND type = ? AND void_at IS NULL', id, a.chart.id, ty) }); } catch (e) { return bad(res, 'dato:' + e.message); }
-  const occurred = b.occurred ? String(b.occurred) : U.nowLocal();
+  let occurred = b.occurred ? String(b.occurred) : U.nowLocal();
   if (!U.validLocal(occurred)) return bad(res, 'fecha');
-  if (occurred > U.nowLocal().slice(0, 11) + '23:59') return bad(res, 'futuro');
+  const byDays = a.chart.pace === 'student';
+  if (byDays) occurred = caseDate(a.chart) + occurred.slice(10); /* manda la fecha del caso; el alumno solo elige la hora */
+  else if (occurred > U.nowLocal().slice(0, 11) + '23:59') return bad(res, 'futuro');
   let rep = null;
-  if (b.replaces_id) { rep = db.get('SELECT * FROM records WHERE id = ? AND chart_id = ? AND user_id = ?', intId(b.replaces_id), a.chart.id, ctx.user.id); if (!rep) return bad(res, 'replaces'); }
-  const r = db.run('INSERT INTO records (chart_id, user_id, author_role, type, data, occurred, created, replaces_id) VALUES (?,?,?,?,?,?,?,?)', a.chart.id, ctx.user.id, a.role, b.type, JSON.stringify(data), occurred, new Date().toISOString(), rep ? rep.id : null);
+  if (b.replaces_id) { rep = db.get('SELECT * FROM records WHERE id = ? AND chart_id = ? AND user_id = ?', intId(b.replaces_id), a.chart.id, ctx.user.id); if (!rep) return bad(res, 'replaces'); if (byDays && rep.day != null && rep.day < a.chart.day) return bad(res, 'day-closed', 409); }
+  const r = db.run('INSERT INTO records (chart_id, user_id, author_role, type, data, occurred, day, created, replaces_id) VALUES (?,?,?,?,?,?,?,?,?)', a.chart.id, ctx.user.id, a.role, b.type, JSON.stringify(data), occurred, a.chart.day || 1, new Date().toISOString(), rep ? rep.id : null);
   json(res, 200, { id: Number(r.lastInsertRowid) });
+});
+R('POST', '/api/charts/:id/advance', async (req, res, ctx) => {
+  const a = chartFor(ctx.user, intId(ctx.params.id)); if (!a) return bad(res, 'notfound', 404);
+  if (a.staff) return bad(res, 'staff', 403);
+  if (a.chart.pace !== 'student') return bad(res, 'pace', 409);
+  if (effStatus(a.chart) !== 'open') return bad(res, 'closed', 409);
+  const cap = dayCap(a.chart); if (a.chart.day >= cap) return bad(res, 'last-day', 409);
+  db.run('UPDATE charts SET day = day + 1 WHERE id = ?', a.chart.id); audit(ctx.user.email, 'avanzar-dia', '#' + a.chart.id + ' → día ' + (a.chart.day + 1));
+  json(res, 200, { day: a.chart.day + 1, cap });
 });
 R('POST', '/api/records/:id/void', async (req, res, ctx) => {
   const r = db.get('SELECT * FROM records WHERE id = ?', intId(ctx.params.id)); if (!r) return bad(res, 'notfound', 404);
   const a = chartFor(ctx.user, r.chart_id); if (!a) return bad(res, 'notfound', 404);
   if (!a.staff && r.user_id !== ctx.user.id) return bad(res, 'forbidden', 403);
   if (!a.staff && effStatus(a.chart) !== 'open') return bad(res, 'closed', 409);
+  if (!a.staff && a.chart.pace === 'student' && r.day != null && r.day < a.chart.day) return bad(res, 'day-closed', 409);
   if (r.void_at) return bad(res, 'already', 409);
   const b = await readJson(req, 4e3); const reason = U.clip(b.reason, 300);
   if (reason.length < 5) return bad(res, 'motivo');
@@ -494,14 +517,14 @@ function consignaFields(b, c) {
   const due = b.due != null ? String(b.due) : c ? c.due : ''; if (due && !U.validDate(due)) return { error: 'due' };
   const tasks = b.tasks != null ? b.tasks : c ? JSON.parse(c.tasks) : []; if (!Array.isArray(tasks)) return { error: 'tasks' };
   const out = [];
-  for (const k of tasks.slice(0, 20)) { const kind = k && TASK_KINDS.includes(k.kind) ? k.kind : null, text = U.clip(k && k.text, 200); if (!kind || !text) continue; out.push({ kind, min: kind === 'libre' ? 0 : Math.min(20, Math.max(1, intId(k.min) || 1)), text }); }
+  for (const k of tasks.slice(0, 20)) { const kind = k && TASK_KINDS.includes(k.kind) ? k.kind : null, text = U.clip(k && k.text, 200); if (!kind || !text) continue; const day = Math.min(60, intId(k.day) || 0); out.push(Object.assign({ kind, min: kind === 'libre' ? 0 : Math.min(20, Math.max(1, intId(k.min) || 1)), text }, day ? { day } : {})); }
   return { v: [title, body, due || '', JSON.stringify(out)] };
 }
 const consignaOut = (c) => ({ id: c.id, title: c.title, body: c.body, due: c.due, tasks: JSON.parse(c.tasks) });
 /* progreso de una historia: cuenta los registros vigentes de cada tipo */
 function taskProgress(tasks, chartId) {
-  const cnt = {}; db.all('SELECT type, COUNT(*) n FROM records WHERE chart_id = ? AND void_at IS NULL GROUP BY type', chartId).forEach((r) => { cnt[r.type] = r.n; });
-  return tasks.map((k) => (k.kind === 'libre' ? Object.assign({}, k, { done: null, count: 0 }) : Object.assign({}, k, { count: cnt[k.kind] || 0, done: (cnt[k.kind] || 0) >= k.min })));
+  const cnt = {}, byDay = {}; db.all('SELECT type, day, COUNT(*) n FROM records WHERE chart_id = ? AND void_at IS NULL GROUP BY type, day', chartId).forEach((r) => { cnt[r.type] = (cnt[r.type] || 0) + r.n; byDay[r.type + ':' + r.day] = r.n; });
+  return tasks.map((k) => { if (k.kind === 'libre') return Object.assign({}, k, { done: null, count: 0 }); const n = k.day ? byDay[k.kind + ':' + k.day] || 0 : cnt[k.kind] || 0; return Object.assign({}, k, { count: n, done: n >= k.min }); });
 }
 function consignaBrief(chartId) {
   const c = db.get('SELECT k.* FROM consignas k JOIN charts h ON h.consigna_id = k.id WHERE h.id = ?', chartId); if (!c) return null;

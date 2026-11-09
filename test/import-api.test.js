@@ -230,3 +230,57 @@ test('clasificar pacientes por asignatura y tema: individual, en bloque, filtros
   const ex = await call('POST', '/api/import/example', { lang: 'ca' }, admin);
   assert.deepStrictEqual((await call('GET', '/api/patients/' + ex.json.id, null, admin)).json.patient.topics, ['Respiratori', 'MPOC', 'Oxigenoteràpia', 'Diabetis']);
 });
+test('ritmo por días: el alumno avanza, los días terminados se cierran y solo el profesor los reabre', async () => {
+  const admin = await sso({ email: 'admin@campus.local', name: 'Admin', admin: true });
+  const alum = await sso({ email: 'g@x.com', name: 'Gina' }), alum2 = await sso({ email: 'h@x.com', name: 'Hugo' });
+  const ex = await call('POST', '/api/import/example', { lang: 'es' }, admin), pid = ex.json.id;
+  const users = (await call('GET', '/api/users', null, admin)).json.users, ug = users.find((u) => u.email === 'g@x.com'), uh = users.find((u) => u.email === 'h@x.com');
+  const k = (await call('POST', '/api/patients/' + pid + '/consignas', { title: 'Por días', body: 'x', tasks: [{ kind: 'constantes', min: 1, text: 'Constantes del día 1', day: 1 }, { kind: 'constantes', min: 1, text: 'Constantes del día 2', day: 2 }, { kind: 'nota', min: 1, text: 'Una nota', day: 0 }, { kind: 'libre', text: 'Libre', day: 3 }] }, admin)).json.id;
+  assert.strictEqual((await call('POST', '/api/patients/' + pid + '/assign', { mode: 'individual', user_ids: [ug.id], consigna_id: k, pace: 'student' }, admin)).status, 200);
+  assert.strictEqual((await call('POST', '/api/patients/' + pid + '/assign', { mode: 'team', team_name: 'Eq', user_ids: [uh.id], consigna_id: k }, admin)).status, 200, 'por defecto el ritmo lo marca el profesor');
+  const cid = (await call('GET', '/api/my/charts', null, alum)).json.charts[0].id, cid2 = (await call('GET', '/api/my/charts', null, alum2)).json.charts[0].id;
+  const info = (await call('GET', '/api/charts/' + cid, null, alum)).json.chart;
+  assert.strictEqual(info.pace, 'student'); assert.strictEqual(info.day, 1); assert.strictEqual(info.cap, 5, 'el último día es el de la última prueba o prescripción');
+  const d1 = info.case_date, addd = (iso, n) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+  const vit = (fc) => ({ type: 'constantes', data: { ta_sis: 120, ta_dia: 80, fc, fr: 16, temp: 36.5, spo2: 97 } });
+  /* día 1: la fecha del caso manda, aunque el alumno mande otra */
+  const r1 = await call('POST', '/api/charts/' + cid + '/records', Object.assign(vit(80), { occurred: '2020-01-01T09:30' }), alum); assert.strictEqual(r1.status, 200);
+  let recs = (await call('GET', '/api/charts/' + cid, null, alum)).json.records; assert.strictEqual(recs[0].occurred, d1 + 'T09:30'); assert.strictEqual(recs[0].day, 1);
+  assert.strictEqual((await call('GET', '/api/charts/' + cid, null, alum)).json.consigna.tasks.filter((t) => t.done).length, 1, 'solo la tarea del día 1 está hecha');
+  /* avanzar */
+  assert.strictEqual((await call('POST', '/api/charts/' + cid + '/advance', null, admin)).status, 403, 'el profesor usa el contador del día');
+  assert.strictEqual((await call('POST', '/api/charts/' + cid2 + '/advance', null, alum2)).status, 409, 'si lo marca el profesor, el alumno no avanza');
+  const adv = await call('POST', '/api/charts/' + cid + '/advance', null, alum); assert.strictEqual(adv.status, 200); assert.strictEqual(adv.json.day, 2);
+  const r2 = await call('POST', '/api/charts/' + cid + '/records', vit(90), alum); assert.strictEqual(r2.status, 200);
+  recs = (await call('GET', '/api/charts/' + cid, null, alum)).json.records; const second = recs.find((r) => r.id === r2.json.id);
+  assert.strictEqual(second.day, 2); assert.strictEqual(second.occurred.slice(0, 10), addd(d1, 1), 'el día 2 cae en la fecha siguiente aunque sea la misma tarde');
+  const tasks = (await call('GET', '/api/charts/' + cid, null, alum)).json.consigna.tasks;
+  assert.deepStrictEqual(tasks.map((t) => t.done), [true, true, false, null], 'las tareas cuentan por su día; «libre» no se comprueba');
+  /* día 1 cerrado: ni anular ni corregir */
+  assert.strictEqual((await call('POST', '/api/records/' + r1.json.id + '/void', { reason: 'me equivoqué' }, alum)).status, 409);
+  assert.strictEqual((await call('POST', '/api/charts/' + cid + '/records', Object.assign(vit(81), { replaces_id: r1.json.id }), alum)).status, 409);
+  assert.strictEqual((await call('POST', '/api/records/' + r2.json.id + '/void', { reason: 'me equivoqué' }, alum)).status, 200, 'el día en curso sí se puede corregir');
+  /* el profesor reabre el día 1 retrocediendo el contador */
+  assert.strictEqual((await call('PUT', '/api/charts/' + cid, { day: 1 }, admin)).status, 200);
+  assert.strictEqual((await call('POST', '/api/records/' + r1.json.id + '/void', { reason: 'me equivoqué' }, alum)).status, 200, 'reabierto por el profesor');
+  /* tope y último día */
+  assert.strictEqual((await call('PUT', '/api/charts/' + cid, { max_day: 99 }, admin)).status, 400); assert.strictEqual((await call('PUT', '/api/charts/' + cid, { max_day: 2 }, admin)).status, 200);
+  assert.strictEqual((await call('GET', '/api/charts/' + cid, null, alum)).json.chart.cap, 2);
+  assert.strictEqual((await call('POST', '/api/charts/' + cid + '/advance', null, alum)).status, 200);
+  assert.strictEqual((await call('POST', '/api/charts/' + cid + '/advance', null, alum)).status, 409, 'en el último día no se avanza');
+  /* cerrada o finalizada: tampoco avanza */
+  await call('PUT', '/api/charts/' + cid, { max_day: null, status: 'closed' }, admin);
+  assert.strictEqual((await call('POST', '/api/charts/' + cid + '/advance', null, alum)).status, 409);
+  /* en el modo del profesor, las fechas siguen siendo las que escribe el alumno (no se pueden poner en el futuro) */
+  assert.strictEqual((await call('POST', '/api/charts/' + cid2 + '/records', Object.assign(vit(70), { occurred: '2999-01-01T10:00' }), alum2)).status, 400);
+  const ok2 = await call('POST', '/api/charts/' + cid2 + '/records', Object.assign(vit(70), { occurred: '2024-02-03T10:00' }), alum2); assert.strictEqual(ok2.status, 200);
+  assert.strictEqual((await call('GET', '/api/charts/' + cid2, null, alum2)).json.records[0].occurred, '2024-02-03T10:00');
+});
+
+test('importar tareas con día: «| 2» o «| día 2» al final de la línea', () => {
+  const IMPL = require('../lib/import');
+  const r = IMPL.parse('[CONSIGNAS]\nConsigna 1: X\nEnunciado: y\nTareas:\n- constantes x2 | Toma de constantes | 1\n- nota | Nota con | barra | día 3\n- plan | Sin día\n', '2025-01-01');
+  assert.deepStrictEqual(r.errors.filter((e) => e.line > 0), []);
+  assert.deepStrictEqual(r.consignas[0].tasks.map((t) => [t.kind, t.min, t.day || 0, t.text]), [['constantes', 2, 1, 'Toma de constantes'], ['nota', 1, 3, 'Nota con | barra'], ['plan', 1, 0, 'Sin día']]);
+  for (const lang of ['es', 'ca']) { const e = IMPL.parse(IMPL.EXAMPLES[lang], '2025-01-01'); assert.deepStrictEqual(e.consignas[1].tasks.map((t) => t.day), [4, 4, 5, 5], lang); assert.deepStrictEqual(e.errors, []); }
+});

@@ -47,7 +47,7 @@
     if (!r.ok) { const e = new Error((j && j.error) || 'error'); e.status = r.status; throw e; }
     return j;
   }
-  const fail = (e) => { if (e.message === 'preview') return toast(t('prev_ro'), true); if (e.message !== 'auth') toast(t('err') + (e.message && e.message !== 'error' ? ' (' + e.message + ')' : ''), true); };
+  const fail = (e) => { if (e.message === 'preview') return toast(t('prev_ro'), true); if (e.message === 'day-closed') return toast(t('dy_closed'), true); if (e.message === 'last-day') return toast(t('dy_last'), true); if (e.message !== 'auth') toast(t('err') + (e.message && e.message !== 'error' ? ' (' + e.message + ')' : ''), true); };
   const pad = (n) => String(n).padStart(2, '0');
   const fmtD = (s) => (s && /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4) : '');
   const fmtDT = (s) => (s ? s.slice(8, 10) + '/' + s.slice(5, 7) + ' ' + s.slice(11, 16) : '');
@@ -220,14 +220,15 @@
     };
     const consSel = h('select', { 'aria-label': t('cs_assign') }, h('option', { value: '' }, t('cs_pick')), (cons || []).map((k) => h('option', { value: k.id }, k.title)));
     const winFrom = h('input', { type: 'date', 'aria-label': t('win_from') }), winTo = h('input', { type: 'date', 'aria-label': t('win_to') });
+    const paceSel = h('select', { 'aria-label': t('pace_title') }, h('option', { value: 'teacher' }, t('pace_teacher')), h('option', { value: 'student' }, t('pace_student'))), capIn = h('input', { type: 'number', min: 1, max: 60, 'aria-label': t('pace_cap'), placeholder: t('pace_auto') });
     const teamName = h('input', { type: 'text', placeholder: t('team_name') }); const teamField = field(t('team_name'), teamName); teamField.hidden = true;
     const modeSel = h('select', { onchange: (e) => { mode = e.target.value; teamField.hidden = mode !== 'team'; } }, h('option', { value: 'individual' }, t('mode_ind')), h('option', { value: 'team' }, t('mode_team')));
     const sjSel = h('select', { onchange: (e) => { sj = e.target.value; drawList(); } }, h('option', { value: '' }, t('all_subjects')), uj.subjects.map((s) => h('option', { value: s.slug }, s.title)));
     const search = h('input', { type: 'search', placeholder: t('search'), oninput: (e) => { q = e.target.value.toLowerCase(); drawList(); } });
     drawList();
-    return panel(t('assign'), [h('div', { class: 'cols' }, field(t('assign_mode'), modeSel), field(t('cs_assign'), consSel), field(t('win_from'), winFrom), field(t('win_to'), winTo), teamField, field(t('subject'), sjSel), field(t('search'), search)),
+    return panel(t('assign'), [h('div', { class: 'cols' }, field(t('assign_mode'), modeSel), field(t('cs_assign'), consSel), field(t('win_from'), winFrom), field(t('win_to'), winTo), field(t('pace_title'), paceSel), field(t('pace_cap'), capIn), teamField, field(t('subject'), sjSel), field(t('search'), search)),
       h('div', { class: 'row' }, h('button', { onclick: () => { visible().forEach((u) => picked.add(u.id)); drawList(); } }, t('select_all')), h('button', { onclick: () => { picked.clear(); drawList(); } }, '✕'), cnt), h('div', null, list),
-      h('p', { class: 'row' }, h('button', { class: 'pri', onclick: async () => { try { const r = await api('POST', '/api/patients/' + id + '/assign', { mode, team_name: teamName.value, consigna_id: consSel.value || null, opens: winFrom.value, closes: winTo.value, user_ids: [...picked] }); toast(t('assigned') + ': ' + r.created + (r.skipped ? ' · ' + r.skipped + ' ' + t('skipped') : '')); viewPatient(id, 'asignar'); } catch (e) { fail(e); } } }, t('assign_btn')),
+      h('p', { class: 'row' }, h('button', { class: 'pri', onclick: async () => { try { const r = await api('POST', '/api/patients/' + id + '/assign', { mode, team_name: teamName.value, consigna_id: consSel.value || null, opens: winFrom.value, closes: winTo.value, pace: paceSel.value, max_day: capIn.value || null, user_ids: [...picked] }); toast(t('assigned') + ': ' + r.created + (r.skipped ? ' · ' + r.skipped + ' ' + t('skipped') : '')); viewPatient(id, 'asignar'); } catch (e) { fail(e); } } }, t('assign_btn')),
         h('button', { onclick: async () => { try { const r = await api('POST', '/api/sync'); toast(t('synced') + ': ' + r.students); viewPatient(id, 'asignar'); } catch (e) { fail(e); } } }, t('sync')))]);
   }
   function activityPanel(id, act) {
@@ -286,7 +287,7 @@
   /* ---------- registros: formulario de alta ---------- */
   function recForm(type, ctx, done) {
     if (window.HCX && window.HCX.forms[type]) return window.HCX.forms[type](ctx, done);
-    const f = {}, when = h('input', { type: 'datetime-local', value: nowInput() });
+    const f = {}, when = h('input', { type: 'datetime-local', value: ctx.caseDate ? ctx.caseDate + 'T' + nowInput().slice(11) : nowInput(), min: ctx.caseDate ? ctx.caseDate + 'T00:00' : null, max: ctx.caseDate ? ctx.caseDate + 'T23:59' : null });
     const inp = (k, o) => (f[k] = h('input', Object.assign({ type: 'text', inputmode: 'decimal', 'aria-label': t(k) }, o || {})));
     let body;
     if (type === 'nota') {
@@ -338,7 +339,7 @@
     const refresh = () => viewChart(id, tab);
     const byType = (ty) => recs.filter((r) => r.type === ty), live = (ty) => byType(ty).filter((r) => !r.void_at);
     const formBox = h('div');
-    const openForm = (type, rep, prefill) => { clear(formBox); formBox.appendChild(recForm(type, { chartId: id, role: c.chart.role, catalog: cat.items, replaces: rep, prefill, orders: c.orders }, (saved) => { if (saved) refresh(); else clear(formBox); })); formBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); };
+    const openForm = (type, rep, prefill) => { clear(formBox); formBox.appendChild(recForm(type, { chartId: id, role: c.chart.role, catalog: cat.items, replaces: rep, prefill, orders: c.orders, caseDate: c.chart.pace === 'student' ? c.chart.case_date : null }, (saved) => { if (saved) refresh(); else clear(formBox); })); formBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); };
     const voidRec = async (r) => { const reason = await ask(t('void'), t('void_prompt'), 5); if (!reason) return; try { await api('POST', '/api/records/' + r.id + '/void', { reason }); refresh(); } catch (e) { fail(e); } };
     const commentRec = async (r) => { const text = await ask(t('comment'), t('comment_prompt'), 2); if (!text) return; try { await api('POST', '/api/charts/' + id + '/comments', { text, record_id: r.id }); refresh(); } catch (e) { fail(e); } };
     const actions = (r) => {
@@ -350,7 +351,7 @@
     const voidInfo = (r) => (r.void_at ? h('div', null, h('span', { class: 'chip red' }, t('voided')), ' ', h('span', { class: 'sub' }, t('reason') + ': ' + r.void_reason + (r.void_name ? ' (' + r.void_name + ')' : ''))) : null);
     const cmts = (r) => (r.comments || []).map((cm) => h('div', { class: 'cm' }, h('b', null, cm.author + ': '), cm.text));
     const who = (r) => h('td', null, r.author, r.author_role ? h('div', { class: 'sub' }, t('p_' + r.author_role)) : null);
-    const timeCell = (r) => h('td', { title: r.occurred.replace('T', ' ') }, fmtDT(r.occurred));
+    const timeCell = (r) => h('td', { title: r.occurred.replace('T', ' ') }, (c.chart.pace === 'student' && r.day ? t('day_short') + r.day + ' · ' : '') + fmtDT(r.occurred));
     const tbl = (heads, rows) => (rows.length ? h('div', { class: 'tw' }, h('table', { class: 'grid' }, h('thead', null, h('tr', null, heads.map((x) => h('th', null, x)))), h('tbody', null, rows))) : empty(t('no_records')));
 
     const X = { c, id, staff, open, role: c.chart.role, recs, byType, live, actions, voidInfo, cmts, who, timeCell, tbl, openForm, refresh };
@@ -389,10 +390,10 @@
 
     const tabs = [['resumen', t('tab_resumen')], ['evolucion', t('tab_evolucion'), byType('nota').length], ['constantes', t('tab_constantes'), byType('constantes').length], ['balance', t('tab_balance'), byType('balance').length], ['cuidados', t('tab_cuidados'), byType('cuidado').length]].concat(window.HCX.extraTabs(X), [['ficha', t('tab_ficha')]]);
     const toolbar = !staff && open ? h('div', { class: 'toolbar row' }, h('b', null, t('tb_record') + ':'), ['nota', 'constantes', 'balance', 'cuidado'].map((ty) => h('button', { class: 'pri sm', onclick: () => openForm(ty) }, '+ ' + t('r_' + ty))), h('button', { class: 'sm', onclick: () => { location.hash = base + '/imprimir'; } }, t('print')))
-      : staff ? h('div', { class: 'toolbar row' }, window.HCX.dayControl(id, c.chart.day, refresh), window.HCX.previewControl(id), window.HCX.consignaControl(id, c.consignas, c.chart.consigna_id, refresh), window.HCX.windowControl(id, c.chart, refresh), c.members.length > 1 ? h('label', { class: 'row' }, t('filter_student') + ':', h('select', { onchange: (e) => { chartUser = e.target.value; refresh(); } }, h('option', { value: '' }, t('all_students')), c.members.map((m) => h('option', { value: m.id, selected: String(m.id) === String(chartUser) }, m.name)))) : null, h('button', { class: 'sm', onclick: () => { location.hash = base + '/imprimir'; } }, t('print'))) : null;
+      : staff ? h('div', { class: 'toolbar row' }, window.HCX.dayControl(id, c.chart.day, refresh), window.HCX.previewControl(id), window.HCX.consignaControl(id, c.consignas, c.chart.consigna_id, refresh), window.HCX.windowControl(id, c.chart, refresh), window.HCX.paceControl(id, c.chart, refresh), c.members.length > 1 ? h('label', { class: 'row' }, t('filter_student') + ':', h('select', { onchange: (e) => { chartUser = e.target.value; refresh(); } }, h('option', { value: '' }, t('all_students')), c.members.map((m) => h('option', { value: m.id, selected: String(m.id) === String(chartUser) }, m.name)))) : null, h('button', { class: 'sm', onclick: () => { location.hash = base + '/imprimir'; } }, t('print'))) : null;
     const right = [h('span', { class: 'chip' }, c.chart.kind === 'team' ? t('team') + ': ' + c.chart.name : t('individual')), stateChip(open), c.chart.role ? h('span', { class: 'chip gry' }, t('p_' + c.chart.role)) : null];
     show(h('div', { class: 'pg-title' }, h('button', { class: 'link', onclick: () => { history.length > 1 ? history.back() : (location.hash = '#/'); } }, t('back')), c.members.length ? h('span', { class: 'mut' }, t('members') + ': ' + c.members.map((m) => m.name).join(', ')) : null),
-      banner(c.patient, right), tabBar(tabs, tab, base), !open && !staff ? h('div', { class: 'panel warn' }, h('div', { class: 'pb' }, t('chart_closed'))) : null, window.HCX.consignaCard(c, tab === 'resumen'), toolbar, formBox, body);
+      banner(c.patient, right), tabBar(tabs, tab, base), !open && !staff ? h('div', { class: 'panel warn' }, h('div', { class: 'pb' }, t('chart_closed'))) : null, window.HCX.consignaCard(c, tab === 'resumen'), window.HCX.dayBar(c, refresh), toolbar, formBox, body);
   }
 
   async function viewMine() {
@@ -400,7 +401,7 @@
     const rows = charts.map((c) => { const age = ageOf(c.nacimiento); return h('tr', { class: c.window === 'scheduled' ? 'locked' : 'clk', onclick: () => { if (c.window !== 'scheduled') location.hash = '#/chart/' + c.id; } },
       h('td', null, c.window === 'scheduled' ? c.patient.trim() : h('a', { href: '#/chart/' + c.id, onclick: (e) => e.stopPropagation() }, c.patient.trim()), c.alergias.length ? h('div', null, h('span', { class: 'al' }, '⚠ ' + c.alergias.join(', '))) : null, c.consigna ? h('div', { class: 'sub' }, t('cs_title') + ': ' + c.consigna.title + (c.consigna.total ? ' · ' + c.consigna.done + '/' + c.consigna.total : '')) : null),
       h('td', null, (age !== '' ? age + ' ' + t('age_years') : '') + (c.sexo ? ' / ' + t('sex_' + c.sexo) : '')), h('td', null, [c.unidad, c.habitacion && 'H ' + c.habitacion, c.cama && 'C ' + c.cama].filter(Boolean).join(' / ')), h('td', null, c.diagnostico),
-      h('td', null, h('span', { class: 'chip' }, c.kind === 'team' ? t('team') + ': ' + c.name : t('individual'))), h('td', { class: 'r' }, c.mine), h('td', null, c.window === 'scheduled' ? h('span', { class: 'chip' }, t('win_from_on').replace('{d}', fmtD(c.opens))) : c.window === 'ended' ? h('span', { class: 'chip amb' }, t('win_ended_on').replace('{d}', fmtD(c.closes))) : stateChip(c.status === 'open'), c.closes && !c.window ? h('div', { class: 'sub' }, t('win_until').replace('{d}', fmtD(c.closes))) : null)); });
+      h('td', null, h('span', { class: 'chip' }, c.kind === 'team' ? t('team') + ': ' + c.name : t('individual'))), h('td', { class: 'r' }, c.mine), h('td', null, c.window === 'scheduled' ? h('span', { class: 'chip' }, t('win_from_on').replace('{d}', fmtD(c.opens))) : c.window === 'ended' ? h('span', { class: 'chip amb' }, t('win_ended_on').replace('{d}', fmtD(c.closes))) : stateChip(c.status === 'open'), c.closes && !c.window ? h('div', { class: 'sub' }, t('win_until').replace('{d}', fmtD(c.closes))) : null, c.pace === 'student' ? h('div', { class: 'sub' }, t('dy_title').replace('{n}', c.day).replace('{m}', c.cap)) : null)); });
     show(h('div', { class: 'pg-title' }, h('h1', null, t('nav_mine'))), h('p', { class: 'mut' }, t('mine_intro')),
       charts.length ? panel(null, h('div', { class: 'tw' }, h('table', { class: 'grid' }, h('thead', null, h('tr', null, [t('col_patient'), t('col_age'), t('col_loc'), t('col_dx'), t('col_chart'), t('col_mine'), t('col_state')].map((x, i) => h('th', { class: i === 5 ? 'r' : '' }, x)))), h('tbody', null, rows))), { flush: true }) : panel(null, empty(t('mine_empty'))));
   }
