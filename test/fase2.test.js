@@ -149,14 +149,27 @@ test('ver como alumno: solo lectura, sin notas del docente y sin lo que aún no 
   assert.ok(!(await call('GET', '/api/users', null, mk)).json.users.some((u) => /historia\.local$/.test(u.email)), 'el alumno de prueba no sale en Alumnado');
 });
 
-test('enviar notas publicadas al Campus', async () => {
-  const body = { slug: 'cuidados', kind: 'practica', ra_id: 3, weight: 2, title: 'Caso EPOC' };
-  assert.strictEqual((await call('POST', '/api/charts/' + cEnf + '/send-campus', body, enf)).status, 403, 'el alumnado no puede');
-  assert.strictEqual((await call('POST', '/api/charts/' + cEnf + '/send-campus', Object.assign({}, body, { kind: '' }), admin)).status, 400, 'la categoría es obligatoria');
-  const r = await call('POST', '/api/charts/' + cEnf + '/send-campus', body, admin);
+test('enviar notas publicadas al Campus: una prueba por actividad, no una por historia', async () => {
+  const group = 'p' + pid, body = { group, slug: 'cuidados', kind: 'practica', ra_id: 3, weight: 2, title: 'Caso EPOC' };
+  assert.strictEqual((await call('POST', '/api/send-campus', body, enf)).status, 403, 'el alumnado no puede');
+  assert.strictEqual((await call('POST', '/api/send-campus', Object.assign({}, body, { kind: '' }), admin)).status, 400, 'la categoría es obligatoria');
+  assert.strictEqual((await call('POST', '/api/send-campus', Object.assign({}, body, { group: 'x1' }), admin)).status, 400);
+  const r = await call('POST', '/api/send-campus', body, admin);
   assert.strictEqual(r.status, 200); assert.strictEqual(r.json.saved, 1);
   assert.strictEqual(campusGot.url, '/api/historia/grades'); assert.strictEqual(campusGot.auth, 'Bearer tok-campus');
-  assert.strictEqual(campusGot.body.kind, 'practica'); assert.strictEqual(campusGot.body.key, 'hc-chart-' + cEnf);
+  assert.strictEqual(campusGot.body.kind, 'practica'); assert.strictEqual(campusGot.body.key, 'hc-p' + pid);
   assert.deepStrictEqual(campusGot.body.grades.map((g) => g.email), ['enf@x.com']);
-  assert.strictEqual((await call('POST', '/api/charts/' + cAux + '/send-campus', body, admin)).status, 400, 'sin notas publicadas');
+  assert.strictEqual((await call('POST', '/api/send-campus', Object.assign({}, body, { group: 'p99999' }), admin)).status, 400, 'sin notas publicadas');
+});
+
+
+test('enviar notas al Campus por consigna: varias historias de la misma actividad forman una sola prueba', async () => {
+  const k = (await call('POST', '/api/patients/' + pid + '/consignas', { title: 'Turno de mañana', body: 'Haz lo que se pide.', tasks: [] }, admin)).json.id;
+  assert.strictEqual((await call('PUT', '/api/charts/' + cEnf, { consigna_id: k }, admin)).status, 200);
+  const g = (await call('GET', '/api/grades', null, admin)).json.grades.find((x) => x.chart_id === cEnf);
+  assert.strictEqual(g.consigna_id, k); assert.strictEqual(g.consigna, 'Turno de mañana');
+  const r = await call('POST', '/api/send-campus', { group: 'k' + k, slug: 'cuidados', kind: 'teoria', title: 'Turno de mañana' }, admin);
+  assert.strictEqual(r.status, 200); assert.strictEqual(campusGot.body.key, 'hc-k' + k); assert.strictEqual(campusGot.body.title, 'Turno de mañana');
+  assert.deepStrictEqual(campusGot.body.grades.map((x) => x.email), ['enf@x.com']);
+  assert.strictEqual((await call('POST', '/api/send-campus', { group: 'p' + pid, slug: 'cuidados', kind: 'teoria', title: 'x' }, admin)).status, 400, 'ya no cuelga del paciente: la historia tiene consigna');
 });

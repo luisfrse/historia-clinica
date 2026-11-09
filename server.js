@@ -8,6 +8,7 @@ const U = require('./lib/util');
 const SSO = require('./lib/sso');
 const CAT = require('./lib/catalog');
 const PAT = require('./lib/patient');
+const REP = require('./lib/reports');
 
 const PORT = parseInt(process.env.PORT, 10) || 3000;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
@@ -89,12 +90,24 @@ function upsertUser(email, name, lang, subjects, role) {
   return db.get('SELECT * FROM users WHERE id = ?', u.id);
 }
 
+/* ---------- calendario de acceso de una historia: desde / hasta (vacío = sin límite) ---------- */
+const todayLocal = () => U.nowLocal().slice(0, 10);
+function chartWindow(c) { const t = todayLocal(); if (c.opens && t < c.opens) return 'scheduled'; if (c.closes && t > c.closes) return 'ended'; return ''; }
+const effStatus = (c) => (chartWindow(c) === 'ended' ? 'closed' : c.status);
+function chartMeta(id) { const c = db.get('SELECT * FROM charts WHERE id = ?', id) || {}; return { status: effStatus(c), opens: c.opens || '', closes: c.closes || '', window: chartWindow(c), consigna_id: c.consigna_id || null }; }
+function windowFields(b) {
+  const opens = b.opens ? String(b.opens) : '', closes = b.closes ? String(b.closes) : '';
+  if ((opens && !U.validDate(opens)) || (closes && !U.validDate(closes))) return { error: 'fecha' };
+  if (opens && closes && closes < opens) return { error: 'rango' };
+  return { opens, closes };
+}
+
 /* ---------- permisos de historias ---------- */
 function chartFor(user, chartId) {
   const c = db.get('SELECT * FROM charts WHERE id = ?', chartId); if (!c) return null;
   if (isStaff(user)) return { chart: c, role: null, staff: true };
   const m = db.get('SELECT role FROM chart_members WHERE chart_id = ? AND user_id = ?', c.id, user.id);
-  return m ? { chart: c, role: m.role, staff: false } : null;
+  return m && chartWindow(c) !== 'scheduled' ? { chart: c, role: m.role, staff: false } : null;
 }
 const orderOut = (o) => ({ id: o.id, drug: o.drug, dose: o.dose, route: o.route, freq: o.freq, times: o.times ? o.times.split(',') : [], prn: !!o.prn, start_day: o.start_day, end_day: o.end_day, notes: o.notes, active: !!o.active });
 /* El alumnado solo ve lo que ya toca según el día del caso; el profesorado lo ve todo. */
@@ -134,7 +147,8 @@ R('GET', '/sso', async (req, res, ctx) => {
   db.run('UPDATE users SET last_login = ? WHERE id = ?', new Date().toISOString(), u.id);
   audit(u.email, 'login-sso', u.role);
   limSso.ok(ip);
-  res.writeHead(302, hdrs({ Location: '/', 'Set-Cookie': setCookie(req, newSession(u.id), TTL / 1000), 'Cache-Control': 'no-store' })); res.end();
+  const to = typeof p.to === 'string' && /^(consigna|chart)\/\d+$/.test(p.to) ? p.to : '';
+  res.writeHead(302, hdrs({ Location: '/' + (to ? '#/go/' + to : ''), 'Set-Cookie': setCookie(req, newSession(u.id), TTL / 1000), 'Cache-Control': 'no-store' })); res.end();
 }, { open: true });
 
 R('POST', '/api/admin/login', async (req, res) => {
@@ -225,17 +239,18 @@ R('POST', '/api/patients/:id/assign', async (req, res, ctx) => {
   const users = ids.map((i) => db.get("SELECT * FROM users WHERE id = ? AND role = 'student' AND active = 1", i)).filter(Boolean);
   if (!users.length) return bad(res, 'users');
   const out = { created: 0, skipped: 0 };
+  const win = windowFields(b); if (win.error) return bad(res, win.error);
   const cons = b.consigna_id ? db.get('SELECT id FROM consignas WHERE id = ? AND patient_id = ?', intId(b.consigna_id), p.id) : null, cid = cons ? cons.id : null;
   db.tx(() => {
     if (b.mode === 'team') {
       const name = U.clip(b.team_name, 80) || 'Equipo';
-      const r = db.run("INSERT INTO charts (patient_id, kind, name, consigna_id, created) VALUES (?,'team',?,?,?)", p.id, name, cid, new Date().toISOString());
+      const r = db.run("INSERT INTO charts (patient_id, kind, name, consigna_id, opens, closes, created) VALUES (?,'team',?,?,?,?,?)", p.id, name, cid, win.opens, win.closes, new Date().toISOString());
       users.forEach((u) => db.run('INSERT INTO chart_members (chart_id, user_id, role) VALUES (?,?,?)', Number(r.lastInsertRowid), u.id, u.profile));
       out.created = 1;
     } else {
       for (const u of users) {
         if (db.get("SELECT 1 x FROM charts c JOIN chart_members m ON m.chart_id = c.id WHERE c.patient_id = ? AND m.user_id = ? AND c.kind = 'individual'", p.id, u.id)) { out.skipped++; continue; }
-        const r = db.run("INSERT INTO charts (patient_id, kind, name, consigna_id, created) VALUES (?,'individual',?,?,?)", p.id, u.name, cid, new Date().toISOString());
+        const r = db.run("INSERT INTO charts (patient_id, kind, name, consigna_id, opens, closes, created) VALUES (?,'individual',?,?,?,?,?)", p.id, u.name, cid, win.opens, win.closes, new Date().toISOString());
         db.run('INSERT INTO chart_members (chart_id, user_id, role) VALUES (?,?,?)', Number(r.lastInsertRowid), u.id, u.profile);
         out.created++;
       }
@@ -250,6 +265,7 @@ R('PUT', '/api/charts/:id', async (req, res, ctx) => {
   if (b.status === 'open' || b.status === 'closed') db.run('UPDATE charts SET status = ? WHERE id = ?', b.status, c.id);
   if (b.name != null) db.run('UPDATE charts SET name = ? WHERE id = ?', U.clip(b.name, 80) || c.name, c.id);
   if (b.consigna_id !== undefined) { const k = b.consigna_id ? db.get('SELECT id FROM consignas WHERE id = ? AND patient_id = ?', intId(b.consigna_id), c.patient_id) : null; if (b.consigna_id && !k) return bad(res, 'consigna'); db.run('UPDATE charts SET consigna_id = ? WHERE id = ?', k ? k.id : null, c.id); }
+  if (b.opens !== undefined || b.closes !== undefined) { const w = windowFields({ opens: b.opens !== undefined ? b.opens : c.opens, closes: b.closes !== undefined ? b.closes : c.closes }); if (w.error) return bad(res, w.error); db.run('UPDATE charts SET opens = ?, closes = ? WHERE id = ?', w.opens, w.closes, c.id); }
   if (b.day != null) { const dd = intId(b.day); if (!dd || dd > 60) return bad(res, 'day'); db.run('UPDATE charts SET day = ? WHERE id = ?', dd, c.id); }
   audit(ctx.user.email, 'historia-edicion', '#' + c.id + ' ' + (b.status || '') + (b.day ? ' día ' + b.day : ''));
   json(res, 200, { ok: true });
@@ -333,13 +349,14 @@ R('GET', '/api/audit', async (req, res) => json(res, 200, { rows: db.all('SELECT
 /* --- historias de trabajo (alumnado y profesorado) --- */
 R('GET', '/api/my/charts', async (req, res, ctx) => {
   const rows = db.all('SELECT c.id, c.kind, c.name, c.status, p.id pid, p.code, p.data, (SELECT COUNT(*) FROM records r WHERE r.chart_id = c.id AND r.user_id = ? AND r.void_at IS NULL) mine, (SELECT COUNT(*) FROM records r WHERE r.chart_id = c.id AND r.void_at IS NULL) total FROM chart_members m JOIN charts c ON c.id = m.chart_id JOIN patients p ON p.id = c.patient_id WHERE m.user_id = ? AND p.archived = 0 ORDER BY c.id DESC', ctx.user.id, ctx.user.id);
-  json(res, 200, { charts: rows.map((r) => { const d = PAT.forStudent(JSON.parse(r.data)); return { consigna: consignaBrief(r.id), id: r.id, kind: r.kind, name: r.name, status: r.status, code: r.code, patient: (d.nombre || '') + ' ' + (d.apellidos || ''), unidad: d.unidad || '', habitacion: d.habitacion || '', cama: d.cama || '', sexo: d.sexo || '', nacimiento: d.fecha_nacimiento || '', alergias: (d.alergias || []).map((x) => x.agente), sin_alergias: !!d.sin_alergias, diagnostico: d.diagnostico_medico || '', mine: r.mine, total: r.total }; }) });
+  json(res, 200, { charts: rows.map((r) => { const d = PAT.forStudent(JSON.parse(r.data)); return { consigna: consignaBrief(r.id), consigna_id: chartMeta(r.id).consigna_id, id: r.id, kind: r.kind, name: r.name, status: r.status, ...chartMeta(r.id), code: r.code, patient: (d.nombre || '') + ' ' + (d.apellidos || ''), unidad: d.unidad || '', habitacion: d.habitacion || '', cama: d.cama || '', sexo: d.sexo || '', nacimiento: d.fecha_nacimiento || '', alergias: (d.alergias || []).map((x) => x.agente), sin_alergias: !!d.sin_alergias, diagnostico: d.diagnostico_medico || '', mine: r.mine, total: r.total }; }) });
 });
 R('GET', '/api/charts/:id', async (req, res, ctx) => {
-  const a = chartFor(ctx.user, intId(ctx.params.id)); if (!a) return bad(res, 'notfound', 404);
+  const a = chartFor(ctx.user, intId(ctx.params.id));
+  if (!a) { const c0 = db.get('SELECT * FROM charts WHERE id = ?', intId(ctx.params.id)); if (c0 && !isStaff(ctx.user) && chartWindow(c0) === 'scheduled' && db.get('SELECT 1 x FROM chart_members WHERE chart_id = ? AND user_id = ?', c0.id, ctx.user.id)) return json(res, 403, { error: 'scheduled', opens: c0.opens }); return bad(res, 'notfound', 404); }
   const p = db.get('SELECT * FROM patients WHERE id = ?', a.chart.patient_id);
   json(res, 200, {
-    chart: { id: a.chart.id, kind: a.chart.kind, name: a.chart.name, status: a.chart.status, role: a.role, day: a.chart.day, consigna_id: a.chart.consigna_id || null }, patient: patientCard(p, a.staff),
+    chart: { id: a.chart.id, kind: a.chart.kind, name: a.chart.name, status: a.staff ? a.chart.status : effStatus(a.chart), opens: a.chart.opens || '', closes: a.chart.closes || '', window: chartWindow(a.chart), role: a.role, day: a.chart.day, consigna_id: a.chart.consigna_id || null }, patient: patientCard(p, a.staff),
     consigna: consignaFor(a.chart), consignas: a.staff ? db.all('SELECT id, title FROM consignas WHERE patient_id = ? ORDER BY id', p.id) : [],
     orders: (a.staff ? db.all('SELECT * FROM orders WHERE patient_id = ? ORDER BY start_day, id', p.id) : visibleOrders(a.chart)).map(orderOut),
     events: (a.staff ? db.all('SELECT * FROM events WHERE patient_id = ? ORDER BY day, id', p.id) : visibleEvents(a.chart)).map(evOut),
@@ -350,7 +367,7 @@ R('GET', '/api/charts/:id', async (req, res, ctx) => {
 R('POST', '/api/charts/:id/records', async (req, res, ctx) => {
   const a = chartFor(ctx.user, intId(ctx.params.id)); if (!a) return bad(res, 'notfound', 404);
   if (a.staff) return bad(res, 'staff-readonly', 403);
-  if (a.chart.status !== 'open') return bad(res, 'closed', 409);
+  if (effStatus(a.chart) !== 'open') return bad(res, 'closed', 409);
   if (db.get('SELECT archived FROM patients WHERE id = ?', a.chart.patient_id).archived) return bad(res, 'archived', 409);
   const b = await readJson(req, 2e5);
   if (!CAT.TYPES.includes(b.type)) return bad(res, 'tipo');
@@ -367,7 +384,7 @@ R('POST', '/api/records/:id/void', async (req, res, ctx) => {
   const r = db.get('SELECT * FROM records WHERE id = ?', intId(ctx.params.id)); if (!r) return bad(res, 'notfound', 404);
   const a = chartFor(ctx.user, r.chart_id); if (!a) return bad(res, 'notfound', 404);
   if (!a.staff && r.user_id !== ctx.user.id) return bad(res, 'forbidden', 403);
-  if (!a.staff && a.chart.status !== 'open') return bad(res, 'closed', 409);
+  if (!a.staff && effStatus(a.chart) !== 'open') return bad(res, 'closed', 409);
   if (r.void_at) return bad(res, 'already', 409);
   const b = await readJson(req, 4e3); const reason = U.clip(b.reason, 300);
   if (reason.length < 5) return bad(res, 'motivo');
@@ -479,6 +496,101 @@ R('PUT', '/api/consignas/:id', async (req, res, ctx) => {
 R('DELETE', '/api/consignas/:id', async (req, res, ctx) => {
   const c = db.get('SELECT * FROM consignas WHERE id = ?', intId(ctx.params.id)); if (!c) return bad(res, 'notfound', 404);
   db.run('UPDATE charts SET consigna_id = NULL WHERE consigna_id = ?', c.id); db.run('DELETE FROM consignas WHERE id = ?', c.id); audit(ctx.user.email, 'consigna-borrada', '#' + c.id); json(res, 200, { ok: true });
+}, { staff: true });
+
+/* --- seguimiento y corrección: qué ha hecho cada alumno o grupo --- */
+const patName = (pdata) => { const d = JSON.parse(pdata); return ((d.apellidos || '') + (d.nombre ? ', ' + d.nombre : '')).trim(); };
+R('GET', '/api/patients/:id/seguimiento', async (req, res, ctx) => {
+  const p = db.get('SELECT id FROM patients WHERE id = ?', intId(ctx.params.id)); if (!p) return bad(res, 'notfound', 404);
+  const groups = new Map();
+  for (const c of db.all('SELECT * FROM charts WHERE patient_id = ? ORDER BY id', p.id)) {
+    const k = c.consigna_id || 0;
+    if (!groups.has(k)) { const kr = k && db.get('SELECT * FROM consignas WHERE id = ?', k); groups.set(k, { consigna: kr ? consignaOut(kr) : null, charts: [] }); }
+    const g = groups.get(k), tasks = g.consigna ? taskProgress(g.consigna.tasks, c.id) : [];
+    const per = {}; db.all('SELECT user_id, COUNT(*) n, MAX(occurred) last FROM records WHERE chart_id = ? AND void_at IS NULL GROUP BY user_id', c.id).forEach((r) => { per[r.user_id] = r; });
+    const gr = {}; db.all('SELECT user_id, total, published FROM grades WHERE chart_id = ?', c.id).forEach((r) => { gr[r.user_id] = { total: r.total, published: !!r.published }; });
+    const tot = db.get('SELECT COUNT(*) n, MAX(occurred) last FROM records WHERE chart_id = ? AND void_at IS NULL', c.id);
+    g.charts.push({ id: c.id, name: c.name, kind: c.kind, ...chartMeta(c.id), raw_status: c.status, records: tot.n, last: tot.last || '', progress: tasks.map((t) => ({ done: t.done, count: t.count })),
+      members: membersOf(c.id).map((m) => ({ id: m.id, name: m.name, records: (per[m.id] || {}).n || 0, last: (per[m.id] || {}).last || '', grade: gr[m.id] || null })) });
+  }
+  json(res, 200, { groups: [...groups.values()].sort((a, b) => (b.consigna ? 1 : 0) - (a.consigna ? 1 : 0) || (a.consigna ? a.consigna.id - b.consigna.id : 0)) });
+}, { staff: true });
+function studentModel(u) {
+  const rows = db.all('SELECT c.*, p.code, p.data pdata FROM charts c JOIN chart_members m ON m.chart_id = c.id JOIN patients p ON p.id = c.patient_id WHERE m.user_id = ? ORDER BY c.id', u.id);
+  return { user: { name: u.name, email: u.email }, charts: rows.map((c) => ({ id: c.id, code: c.code, patient: patName(c.pdata), name: c.kind === 'team' ? c.name : '', status: c.status, consigna: consignaFor(c),
+    grade: db.get('SELECT total, published, comment FROM grades WHERE chart_id = ? AND user_id = ?', c.id, u.id) || null,
+    records: db.all('SELECT * FROM records WHERE chart_id = ? AND user_id = ? ORDER BY occurred, id', c.id, u.id).map((r) => Object.assign({}, r, { data: JSON.parse(r.data), comments: db.all('SELECT k.text, x.name author FROM comments k JOIN users x ON x.id = k.user_id WHERE k.record_id = ? ORDER BY k.id', r.id) })) })) };
+}
+const studentOr404 = (id) => db.get("SELECT * FROM users WHERE id = ? AND role = 'student'", intId(id));
+R('GET', '/api/students/:id/work', async (req, res, ctx) => {
+  const u = studentOr404(ctx.params.id); if (!u) return bad(res, 'notfound', 404);
+  const m = studentModel(u);
+  json(res, 200, { user: { id: u.id, name: u.name, email: u.email }, charts: m.charts.map((c) => ({ id: c.id, patient: c.patient, code: c.code, name: c.name, status: c.status, ...chartMeta(c.id),
+    consigna: c.consigna ? { title: c.consigna.title, due: c.consigna.due, done: c.consigna.tasks.filter((t) => t.done).length, total: c.consigna.tasks.filter((t) => t.done != null).length } : null,
+    records: c.records.filter((r) => !r.void_at).length, last: c.records.length ? c.records[c.records.length - 1].occurred : '', grade: c.grade ? { total: c.grade.total, published: !!c.grade.published } : null })) });
+}, { staff: true });
+const slugName = (n) => String(n).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'alumno';
+R('GET', '/api/students/:id/report.pdf', async (req, res, ctx) => {
+  const u = studentOr404(ctx.params.id); if (!u) return bad(res, 'notfound', 404);
+  const lang = ctx.url.searchParams.get('lang') === 'es' ? 'es' : 'ca', buf = REP.studentPdf(studentModel(u), lang, todayLocal());
+  audit(ctx.user.email, 'informe-pdf', u.email);
+  res.writeHead(200, hdrs({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="informe-' + slugName(u.name) + '.pdf"', 'Content-Length': buf.length, 'Cache-Control': 'no-store' })); res.end(buf);
+}, { staff: true });
+R('GET', '/api/reports.zip', async (req, res, ctx) => {
+  const lang = ctx.url.searchParams.get('lang') === 'es' ? 'es' : 'ca', pid = intId(ctx.url.searchParams.get('patient'));
+  const users = db.all("SELECT DISTINCT u.* FROM users u JOIN records r ON r.user_id = u.id JOIN charts c ON c.id = r.chart_id WHERE u.role = 'student' AND u.email NOT LIKE ?" + (pid ? ' AND c.patient_id = ?' : '') + ' ORDER BY u.name COLLATE NOCASE', ...(pid ? ['%@historia.local', pid] : ['%@historia.local']));
+  if (!users.length) return bad(res, 'No hay registros de alumnado que descargar.', 404);
+  const used = new Set(), files = users.map((u) => { let n = slugName(u.name), k = n, i = 2; while (used.has(k)) k = n + '_' + i++; used.add(k); return { name: k + '.pdf', data: REP.studentPdf(studentModel(u), lang, todayLocal()) }; });
+  const buf = REP.zipStore(files); audit(ctx.user.email, 'informes-zip', files.length + ' alumnos');
+  res.writeHead(200, hdrs({ 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="informes-alumnado.zip"', 'Content-Length': buf.length, 'Cache-Control': 'no-store' })); res.end(buf);
+}, { staff: true });
+
+/* --- borrar los datos introducidos por el alumnado (fin de curso o cuando se quiera) --- */
+function cleanupTargets(scope, id) {
+  if (scope === 'student') { const u = studentOr404(id); if (!u) return null; return { user: u, chartIds: db.all('SELECT chart_id FROM chart_members WHERE user_id = ?', u.id).map((r) => r.chart_id) }; }
+  let rows;
+  if (scope === 'all') rows = db.all('SELECT id FROM charts');
+  else if (scope === 'patient') { if (!db.get('SELECT 1 x FROM patients WHERE id = ?', intId(id))) return null; rows = db.all('SELECT id FROM charts WHERE patient_id = ?', intId(id)); }
+  else if (scope === 'consigna') { if (!db.get('SELECT 1 x FROM consignas WHERE id = ?', intId(id))) return null; rows = db.all('SELECT id FROM charts WHERE consigna_id = ?', intId(id)); }
+  else if (scope === 'chart') { if (!db.get('SELECT 1 x FROM charts WHERE id = ?', intId(id))) return null; rows = [{ id: intId(id) }]; }
+  else return null;
+  return { chartIds: rows.map((r) => r.id) };
+}
+const inList = (ids) => '(' + (ids.length ? ids.map(Number).join(',') : '-1') + ')';
+function cleanupCounts(tg) {
+  const q = (sql) => db.get(sql).n;
+  if (tg.user) { const uid = tg.user.id; return { records: q('SELECT COUNT(*) n FROM records WHERE user_id = ' + uid), comments: q('SELECT COUNT(*) n FROM comments WHERE record_id IN (SELECT id FROM records WHERE user_id = ' + uid + ')'), grades: q('SELECT COUNT(*) n FROM grades WHERE user_id = ' + uid), charts: tg.chartIds.length }; }
+  const L = inList(tg.chartIds);
+  return { records: q('SELECT COUNT(*) n FROM records WHERE chart_id IN ' + L), comments: q('SELECT COUNT(*) n FROM comments WHERE chart_id IN ' + L), grades: q('SELECT COUNT(*) n FROM grades WHERE chart_id IN ' + L), charts: tg.chartIds.length };
+}
+R('GET', '/api/cleanup', async (req, res, ctx) => {
+  const scope = ctx.url.searchParams.get('scope'), tg = cleanupTargets(scope, ctx.url.searchParams.get('id')); if (!tg) return bad(res, 'notfound', 404);
+  if (scope === 'all' && ctx.user.role !== 'admin') return bad(res, 'forbidden', 403);
+  json(res, 200, cleanupCounts(tg));
+}, { staff: true });
+R('POST', '/api/cleanup', async (req, res, ctx) => {
+  const b = await readJson(req, 4e3), scope = String(b.scope || ''), tg = cleanupTargets(scope, b.id); if (!tg) return bad(res, 'notfound', 404);
+  if (scope === 'all' && ctx.user.role !== 'admin') return bad(res, 'forbidden', 403);
+  if (!/^(borrar|esborrar)$/i.test(String(b.confirm || '').trim())) return bad(res, 'confirm');
+  const withGrades = b.grades !== false, withCharts = !!b.charts, n = cleanupCounts(tg);
+  db.tx(() => {
+    if (tg.user) {
+      const uid = tg.user.id;
+      db.run('DELETE FROM comments WHERE record_id IN (SELECT id FROM records WHERE user_id = ?)', uid); db.run('DELETE FROM records WHERE user_id = ?', uid);
+      if (withGrades) db.run('DELETE FROM grades WHERE user_id = ?', uid);
+      if (withCharts) {
+        for (const cid of tg.chartIds) { const c = db.get('SELECT kind FROM charts WHERE id = ?', cid); if (c && c.kind === 'individual' && db.get('SELECT COUNT(*) n FROM chart_members WHERE chart_id = ?', cid).n <= 1) db.run('DELETE FROM charts WHERE id = ?', cid); }
+        db.run('DELETE FROM chart_members WHERE user_id = ?', uid);
+      }
+    } else {
+      const L = inList(tg.chartIds);
+      db.run('DELETE FROM comments WHERE chart_id IN ' + L); db.run('DELETE FROM records WHERE chart_id IN ' + L);
+      if (withGrades) db.run('DELETE FROM grades WHERE chart_id IN ' + L);
+      if (withCharts) db.run('DELETE FROM charts WHERE id IN ' + L);
+    }
+  });
+  audit(ctx.user.email, 'borrado-datos', scope + (b.id ? ' #' + b.id : '') + ': ' + n.records + ' registros, ' + n.comments + ' comentarios' + (withGrades ? ', ' + n.grades + ' notas' : '') + (withCharts ? ', historias' : ''));
+  json(res, 200, { ok: true, deleted: n });
 }, { staff: true });
 
 /* --- importar un caso desde texto plano (lo que devuelve una IA) --- */
@@ -631,25 +743,27 @@ R('PUT', '/api/charts/:id/grades/:uid', async (req, res, ctx) => {
   audit(ctx.user.email, 'nota', '#' + c.id + ' alumno ' + uid + ' = ' + total + (b.published ? ' (publicada)' : ''));
   json(res, 200, { ok: true, total });
 }, { staff: true });
-const GRADE_SQL = 'SELECT g.*, u.name, u.email, u.subjects usubs, c.name chart_name, c.kind, p.code, p.data pdata FROM grades g JOIN users u ON u.id = g.user_id JOIN charts c ON c.id = g.chart_id JOIN patients p ON p.id = c.patient_id ORDER BY p.id, c.id, u.name COLLATE NOCASE';
+const GRADE_SQL = 'SELECT g.*, u.name, u.email, u.subjects usubs, c.name chart_name, c.kind, c.consigna_id, c.patient_id, k.title ktitle, p.code, p.data pdata FROM grades g JOIN users u ON u.id = g.user_id JOIN charts c ON c.id = g.chart_id JOIN patients p ON p.id = c.patient_id LEFT JOIN consignas k ON k.id = c.consigna_id ORDER BY p.id, c.consigna_id, c.id, u.name COLLATE NOCASE';
 R('GET', '/api/grades', async (req, res) => {
   const rows = db.all(GRADE_SQL);
-  json(res, 200, { rubric: getRubric(), campus: JSON.parse(db.getSetting('campus_subjects', '[]')), grades: rows.map((r) => Object.assign(gradeOut(r), { subjects: JSON.parse(r.usubs || '[]'), chart_id: r.chart_id, name: r.name, email: r.email, chart: r.chart_name, kind: r.kind, code: r.code, patient: JSON.parse(r.pdata).apellidos || '' })) });
+  json(res, 200, { rubric: getRubric(), campus: JSON.parse(db.getSetting('campus_subjects', '[]')), grades: rows.map((r) => Object.assign(gradeOut(r), { consigna_id: r.consigna_id, consigna: r.ktitle || '', patient_id: r.patient_id, subjects: JSON.parse(r.usubs || '[]'), chart_id: r.chart_id, name: r.name, email: r.email, chart: r.chart_name, kind: r.kind, code: r.code, patient: JSON.parse(r.pdata).apellidos || '' })) });
 }, { staff: true });
-R('POST', '/api/charts/:id/send-campus', async (req, res, ctx) => {
+/* Envía al Campus las notas publicadas de una ACTIVIDAD: todas las historias que comparten consigna (o, sin consigna, las del mismo paciente) forman una sola prueba. */
+R('POST', '/api/send-campus', async (req, res, ctx) => {
   if (!CAMPUS_TOKEN) return bad(res, 'Falta CAMPUS_TOKEN en el entorno.', 503);
-  const c = db.get('SELECT c.*, p.code, p.data pdata FROM charts c JOIN patients p ON p.id = c.patient_id WHERE c.id = ?', intId(ctx.params.id)); if (!c) return bad(res, 'notfound', 404);
-  const b = await readJson(req, 4e3), slug = U.clip(b.slug, 80), title = U.clip(b.title, 160), kind = ['teoria', 'practica', 'seguimiento'].includes(b.kind) ? b.kind : '';
+  const b = await readJson(req, 4e3), m = String(b.group || '').match(/^([kp])(\d+)$/); if (!m) return bad(res, 'group');
+  const slug = U.clip(b.slug, 80), title = U.clip(b.title, 160), kind = ['teoria', 'practica', 'seguimiento'].includes(b.kind) ? b.kind : '';
   if (!slug || !title || !kind) return bad(res, 'Elige asignatura, categoría y título.');
-  const rows = db.all('SELECT g.total, u.email FROM grades g JOIN users u ON u.id = g.user_id WHERE g.chart_id = ? AND g.published = 1 AND g.total IS NOT NULL', c.id);
-  if (!rows.length) return bad(res, 'No hay notas publicadas en esta historia.');
+  const rows = db.all('SELECT g.total, u.email FROM grades g JOIN users u ON u.id = g.user_id JOIN charts c ON c.id = g.chart_id WHERE g.published = 1 AND g.total IS NOT NULL AND ' + (m[1] === 'k' ? 'c.consigna_id = ?' : 'c.consigna_id IS NULL AND c.patient_id = ?') + ' ORDER BY g.updated', +m[2]);
+  const byEmail = new Map(); rows.forEach((x) => byEmail.set(x.email, x.total));
+  if (!byEmail.size) return bad(res, 'No hay notas publicadas en esta actividad.');
   let r, j;
   try {
-    r = await fetch(CAMPUS_URL + '/api/historia/grades', { method: 'POST', headers: { Authorization: 'Bearer ' + CAMPUS_TOKEN, 'Content-Type': 'application/json' }, body: JSON.stringify({ slug, key: 'hc-chart-' + c.id, title, kind, ra_id: b.ra_id || null, weight: b.weight, grades: rows.map((x) => ({ email: x.email, grade: x.total })) }), signal: AbortSignal.timeout(20000) });
+    r = await fetch(CAMPUS_URL + '/api/historia/grades', { method: 'POST', headers: { Authorization: 'Bearer ' + CAMPUS_TOKEN, 'Content-Type': 'application/json' }, body: JSON.stringify({ slug, key: 'hc-' + m[1] + m[2], title, kind, ra_id: b.ra_id || null, weight: b.weight, grades: [...byEmail].map(([email, grade]) => ({ email, grade })) }), signal: AbortSignal.timeout(20000) });
     j = await r.json().catch(() => ({}));
   } catch (e) { return bad(res, 'No se pudo contactar con el Campus.', 502); }
   if (!r.ok) return bad(res, j.msg || 'El Campus respondió ' + r.status, 502);
-  audit(ctx.user.email, 'enviar-notas-campus', '#' + c.id + ' → ' + slug + ' (' + j.saved + ' notas)');
+  audit(ctx.user.email, 'enviar-notas-campus', m[1] + m[2] + ' → ' + slug + ' (' + j.saved + ' notas)');
   json(res, 200, j);
 }, { staff: true });
 const csvCell = (v) => { let s = String(v == null ? '' : v); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };

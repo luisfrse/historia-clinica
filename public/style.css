@@ -186,3 +186,7 @@ textarea.mono { font-family: ui-monospace, Consolas, 'Courier New', monospace; f
 .consigna .cs-tasks li.ok { color: #17592b; } .consigna .ck { display: inline-block; width: 1.3em; font-weight: 700; }
 .sr { position: absolute; left: -9999px; }
 .cs-edit .row { margin-bottom: 6px; }
+/* seguimiento, fechas y borrado */
+tr.locked { opacity: .65; cursor: default; }
+.win { display: inline-block; } .win > summary { cursor: pointer; color: var(--mut); font-size: .9rem; } .win[open] { display: block; flex-basis: 100%; }
+.danger-zone > summary { color: #a12; }

@@ -105,3 +105,58 @@ test('consignas: varias por paciente, asignación, progreso para el alumno y per
   assert.strictEqual((await call('DELETE', '/api/consignas/' + list[1].id, null, admin)).status, 200);
   assert.strictEqual((await call('GET', '/api/charts/' + mine[0].id, null, alum)).json.consigna, null, 'al borrar la consigna la historia se queda sin ella');
 });
+
+test('acceso programado, seguimiento, informe PDF/ZIP y borrado de datos del alumnado', async () => {
+  const admin = await sso({ email: 'admin@campus.local', name: 'Admin', admin: true });
+  const alum = await sso({ email: 'c@x.com', name: 'Carla Pons' });
+  const ex = await call('POST', '/api/import/example', { lang: 'es' }, admin), pid = ex.json.id;
+  const ub = (await call('GET', '/api/users', null, admin)).json.users.find((u) => u.email === 'c@x.com');
+  const kid = (await call('GET', '/api/patients/' + pid + '/consignas', null, admin)).json.consignas[0].id;
+  /* programada para el futuro: el alumno la ve en su lista pero no puede abrirla */
+  assert.strictEqual((await call('POST', '/api/patients/' + pid + '/assign', { mode: 'individual', user_ids: [ub.id], consigna_id: kid, opens: '2999-01-01' }, admin)).status, 200);
+  const mine = (await call('GET', '/api/my/charts', null, alum)).json.charts; assert.strictEqual(mine.length, 1);
+  const cid = mine[0].id; assert.strictEqual(mine[0].window, 'scheduled'); assert.strictEqual(mine[0].opens, '2999-01-01');
+  const early = await call('GET', '/api/charts/' + cid, null, alum); assert.strictEqual(early.status, 403); assert.strictEqual(early.json.error, 'scheduled');
+  const nota = { type: 'nota', data: { texto: 'Nota de prueba escrita por la alumna.' } };
+  assert.strictEqual((await call('POST', '/api/charts/' + cid + '/records', nota, alum)).status, 404, 'no puede escribir antes de la fecha');
+  assert.strictEqual((await call('PUT', '/api/charts/' + cid, { opens: '2030-05-01', closes: '2030-04-01' }, admin)).status, 400, 'hasta no puede ser anterior a desde');
+  /* terminada: se puede ver pero no escribir */
+  assert.strictEqual((await call('PUT', '/api/charts/' + cid, { opens: '', closes: '2000-01-01' }, admin)).status, 200);
+  const late = (await call('GET', '/api/charts/' + cid, null, alum)); assert.strictEqual(late.status, 200); assert.strictEqual(late.json.chart.status, 'closed'); assert.strictEqual(late.json.chart.window, 'ended');
+  assert.strictEqual((await call('POST', '/api/charts/' + cid + '/records', nota, alum)).status, 409);
+  /* abierta sin límites */
+  assert.strictEqual((await call('PUT', '/api/charts/' + cid, { opens: '', closes: '' }, admin)).status, 200);
+  assert.strictEqual((await call('POST', '/api/charts/' + cid + '/records', nota, alum)).status, 200);
+  /* seguimiento por consigna */
+  const sg = (await call('GET', '/api/patients/' + pid + '/seguimiento', null, admin)).json.groups;
+  const g1 = sg.find((g) => g.consigna && g.consigna.id === kid); assert.ok(g1, 'grupo de la consigna');
+  const ch = g1.charts.find((c) => c.id === cid); assert.strictEqual(ch.members[0].records, 1); assert.strictEqual(ch.records, 1);
+  assert.strictEqual((await call('GET', '/api/patients/' + pid + '/seguimiento', null, alum)).status, 403);
+  /* ficha de trabajo del alumno e informe */
+  const work = (await call('GET', '/api/students/' + ub.id + '/work', null, admin)).json; assert.strictEqual(work.charts.length, 1); assert.strictEqual(work.charts[0].records, 1);
+  const pdf = await fetch(base + '/api/students/' + ub.id + '/report.pdf?lang=es', { headers: { Cookie: admin } });
+  assert.strictEqual(pdf.status, 200); assert.match(pdf.headers.get('content-type'), /application\/pdf/);
+  const buf = Buffer.from(await pdf.arrayBuffer()); assert.strictEqual(buf.slice(0, 5).toString(), '%PDF-'); assert.ok(buf.toString('latin1').includes('Nota de prueba escrita'), 'el PDF lleva lo que escribió');
+  assert.strictEqual((await fetch(base + '/api/students/' + ub.id + '/report.pdf', { headers: { Cookie: alum } })).status, 403);
+  const zip = await fetch(base + '/api/reports.zip', { headers: { Cookie: admin } }); assert.strictEqual(zip.status, 200);
+  const zb = Buffer.from(await zip.arrayBuffer()); assert.strictEqual(zb.slice(0, 2).toString(), 'PK'); assert.ok(zb.includes(Buffer.from('Carla_Pons.pdf')));
+  assert.ok(!zb.includes(Buffer.from('alumno_prueba')), 'el alumno de prueba no entra en el ZIP');
+  /* borrado: pide confirmación, conserva la historia salvo que se pida */
+  assert.strictEqual((await call('GET', '/api/cleanup?scope=student&id=' + ub.id, null, admin)).json.records, 1);
+  assert.strictEqual((await call('POST', '/api/cleanup', { scope: 'student', id: ub.id }, admin)).status, 400, 'sin confirmar no borra');
+  assert.strictEqual((await call('POST', '/api/cleanup', { scope: 'student', id: ub.id, confirm: 'BORRAR' }, alum)).status, 403);
+  assert.strictEqual((await call('POST', '/api/cleanup', { scope: 'student', id: ub.id, confirm: 'BORRAR' }, admin)).status, 200);
+  assert.strictEqual((await call('GET', '/api/students/' + ub.id + '/work', null, admin)).json.charts[0].records, 0);
+  assert.strictEqual((await call('GET', '/api/my/charts', null, alum)).json.charts.length, 1, 'la historia sigue asignada');
+  assert.strictEqual((await call('POST', '/api/cleanup', { scope: 'chart', id: cid, confirm: 'borrar', charts: true }, admin)).status, 200);
+  assert.strictEqual((await call('GET', '/api/my/charts', null, alum)).json.charts.length, 0, 'con «borrar historias» desaparece la asignación');
+  assert.ok((await call('GET', '/api/charts/' + ex.json.chart_id, null, admin)).json.records.length > 5, 'los registros de otras historias no se tocan');
+});
+
+test('enlace directo desde el Campus: SSO con «to» lleva a la actividad', async () => {
+  const go = async (to) => { const r = await fetch(base + '/sso?t=' + encodeURIComponent(token({ email: 'd' + Math.random().toString(36).slice(2) + '@x.com', name: 'D', to })), { redirect: 'manual' }); return r.headers.get('location'); };
+  assert.strictEqual(await go('consigna/5'), '/#/go/consigna/5');
+  assert.strictEqual(await go('chart/9'), '/#/go/chart/9');
+  assert.strictEqual(await go('consigna/5/../../x'), '/', 'un destino no válido se ignora');
+  assert.strictEqual(await go(undefined), '/');
+});
