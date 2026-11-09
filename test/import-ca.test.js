@@ -42,3 +42,20 @@ test('importar: el ejemplo en catalán y en castellano rellenan los mismos campo
   assert.strictEqual(es.unidad, 'Medicina Interna'); assert.strictEqual(es.habitacion, '214');
   for (const k of ['unidad', 'habitacion', 'cama', 'nhc', 'procedencia', 'dieta', 'aislamiento']) assert.ok(!/\n|:/.test(ca[k]), k + ' no arrastra otras líneas');
 });
+
+test('importar consignas: en catalán y en castellano, con tipo, mínimo y tareas libres', () => {
+  for (const lang of ['ca', 'es']) {
+    const r = IMP.parse(IMP.EXAMPLES[lang], '2025-03-12');
+    assert.deepStrictEqual(r.errors, [], lang);
+    assert.strictEqual(r.consignas.length, 2, lang);
+    const k = r.consignas[0];
+    assert.ok(k.title.length > 5 && k.body.length > 40, 'título y enunciado');
+    assert.deepStrictEqual(k.tasks.map((x) => x.kind), ['constantes', 'valoracion', 'medicacion', 'nota']);
+    assert.deepStrictEqual(k.tasks.map((x) => x.min), [2, 1, 2, 1]);
+    assert.strictEqual(r.consignas[1].tasks.find((x) => x.kind === 'libre').min, 0);
+  }
+  const r = IMP.parse('[CONSIGNES]\nConsigna 1: Prova\nEnunciat: Fes això.\nSegueix aquí.\nLliurament: 20/03/2025\nTasques:\n- constants:3 | Tres preses\n- inventada | Res\n- lliure | Explica-ho\n', '2025-01-01');
+  assert.strictEqual(r.consignas[0].body, 'Fes això.\nSegueix aquí.'); assert.strictEqual(r.consignas[0].due, '2025-03-20');
+  assert.deepStrictEqual(r.consignas[0].tasks.map((x) => [x.kind, x.min]), [['constantes', 3], ['libre', 0]]);
+  assert.ok(r.errors.some((e) => /inventada/.test(e.msg)), 'tipo de tarea desconocido se informa');
+});

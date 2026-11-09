@@ -68,3 +68,40 @@ test('importar caso: vista previa, creación y permisos', async () => {
   assert.strictEqual(pat.data.diagnostico_medico, 'Neumonía'); assert.strictEqual(pat.data.sin_alergias, true);
   assert.match(pat.data.notas_docente, /profesorado/);
 });
+
+test('consignas: varias por paciente, asignación, progreso para el alumno y permisos', async () => {
+  const admin = await sso({ email: 'admin@campus.local', name: 'Admin', admin: true });
+  const alum = await sso({ email: 'b@x.com', name: 'Beatriz' });
+  const ex = await call('POST', '/api/import/example', { lang: 'ca' }, admin); assert.strictEqual(ex.status, 200);
+  const pid = ex.json.id, chart = ex.json.chart_id;
+  const list = (await call('GET', '/api/patients/' + pid + '/consignas', null, admin)).json.consignas;
+  assert.strictEqual(list.length, 2, 'el ejemplo trae dos consignas importadas');
+  assert.strictEqual((await call('GET', '/api/patients/' + pid + '/consignas', null, alum)).status, 403);
+  /* la historia de ejemplo usa la primera: las tareas se marcan solas con los registros */
+  const v = (await call('GET', '/api/charts/' + chart, null, admin)).json;
+  assert.strictEqual(v.consigna.id, list[0].id);
+  const by = Object.fromEntries(v.consigna.tasks.map((x) => [x.kind, x]));
+  assert.strictEqual(by.constantes.done, true); assert.strictEqual(by.medicacion.done, true); assert.strictEqual(by.nota.done, true); assert.strictEqual(by.valoracion.done, false);
+  /* crear, editar, asignar otra consigna y borrar */
+  const nueva = await call('POST', '/api/patients/' + pid + '/consignas', { title: 'Solo balance', body: 'Registra el balance.', due: '2030-01-31', tasks: [{ kind: 'balance', min: 2, text: 'Dos registros' }, { kind: 'raro', text: 'x' }, { kind: 'libre', text: 'Comenta' }] }, admin);
+  assert.strictEqual(nueva.status, 200);
+  assert.strictEqual((await call('POST', '/api/patients/' + pid + '/consignas', { title: '' }, admin)).status, 400);
+  assert.strictEqual((await call('POST', '/api/patients/' + pid + '/consignas', { title: 'x', due: 'mañana' }, admin)).status, 400);
+  const k2 = (await call('GET', '/api/patients/' + pid + '/consignas', null, admin)).json.consignas.find((k) => k.id === nueva.json.id);
+  assert.deepStrictEqual(k2.tasks.map((x) => x.kind), ['balance', 'libre'], 'los tipos desconocidos se descartan');
+  assert.strictEqual((await call('PUT', '/api/charts/' + chart, { consigna_id: nueva.json.id }, admin)).status, 200);
+  const v2 = (await call('GET', '/api/charts/' + chart, null, admin)).json;
+  assert.strictEqual(v2.consigna.title, 'Solo balance'); assert.strictEqual(v2.consigna.tasks[0].done, true, 'hay 3 balances de muestra');
+  assert.strictEqual((await call('PUT', '/api/charts/' + chart, { consigna_id: 99999 }, admin)).status, 400, 'una consigna de otro paciente o inexistente no vale');
+  /* asignar con consigna a un alumno real */
+  const users = (await call('GET', '/api/users', null, admin)).json.users; const ub = users.find((u) => u.email === 'b@x.com');
+  assert.strictEqual((await call('POST', '/api/patients/' + pid + '/assign', { mode: 'individual', user_ids: [ub.id], consigna_id: list[1].id }, admin)).status, 200);
+  const mine = (await call('GET', '/api/my/charts', null, alum)).json.charts;
+  assert.strictEqual(mine.length, 1); assert.strictEqual(mine[0].consigna.title, list[1].title); assert.strictEqual(mine[0].consigna.done, 0);
+  const mc = (await call('GET', '/api/charts/' + mine[0].id, null, alum)).json;
+  assert.strictEqual(mc.consigna.title, list[1].title); assert.deepStrictEqual(mc.consignas, [], 'el alumno no recibe la lista de consignas');
+  assert.strictEqual((await call('PUT', '/api/charts/' + mine[0].id, { consigna_id: null }, alum)).status, 403);
+  assert.strictEqual((await call('DELETE', '/api/consignas/' + list[1].id, null, alum)).status, 403);
+  assert.strictEqual((await call('DELETE', '/api/consignas/' + list[1].id, null, admin)).status, 200);
+  assert.strictEqual((await call('GET', '/api/charts/' + mine[0].id, null, alum)).json.consigna, null, 'al borrar la consigna la historia se queda sin ella');
+});

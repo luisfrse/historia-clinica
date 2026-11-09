@@ -198,18 +198,18 @@
     const actions = [h('button', { onclick: () => { location.hash = base + '/edit'; } }, t('edit')), h('button', { class: 'danger', onclick: async () => { if (patient.archived || confirm(t('confirm_archive'))) { await api('PUT', '/api/patients/' + id, { archived: !patient.archived }); viewPatient(id, tab); } } }, patient.archived ? t('restore') : t('archive'))];
     let body;
     if (tab === 'ficha') body = [revisions ? h('p', { class: 'mut' }, revisions + ' ' + t('revisions')) : null, fichaPanels(patient, true)];
-    else if (tab === 'asignar') body = assignPanel(id, charts, uj);
+    else if (tab === 'asignar') body = assignPanel(id, charts, uj, (await api('GET', '/api/patients/' + id + '/consignas')).consignas);
     else if (tab === 'historias') body = panel(null, charts.length ? h('div', { class: 'tw' }, h('table', { class: 'grid' }, h('thead', null, h('tr', null, [t('col_chart'), t('col_type'), t('col_members'), t('col_records'), t('col_last'), t('col_state'), ''].map((x, i) => h('th', { class: i === 3 ? 'r' : '' }, x)))),
-      h('tbody', null, charts.map((c) => h('tr', null, h('td', null, h('a', { href: '#/chart/' + c.id }, c.name)), h('td', null, h('span', { class: 'chip' }, c.kind === 'team' ? t('team') : t('individual'))), h('td', null, c.members.map((m) => m.name).join(', ')), h('td', { class: 'r' }, c.recs), h('td', null, c.last ? fmtISO(c.last) : '—'), h('td', null, stateChip(c.status === 'open')),
+      h('tbody', null, charts.map((c) => h('tr', null, h('td', null, h('a', { href: '#/chart/' + c.id }, c.name), c.brief ? h('div', { class: 'sub' }, c.brief.title + (c.brief.total ? ' · ' + c.brief.done + '/' + c.brief.total : '')) : null), h('td', null, h('span', { class: 'chip' }, c.kind === 'team' ? t('team') : t('individual'))), h('td', null, c.members.map((m) => m.name).join(', ')), h('td', { class: 'r' }, c.recs), h('td', null, c.last ? fmtISO(c.last) : '—'), h('td', null, stateChip(c.status === 'open')),
         h('td', null, h('div', { class: 'row' }, h('button', { class: 'sm', onclick: () => { location.hash = '#/chart/' + c.id; } }, t('open_it')), h('button', { class: 'sm', onclick: async () => { try { await api('PUT', '/api/charts/' + c.id, { status: c.status === 'open' ? 'closed' : 'open' }); viewPatient(id, tab); } catch (e) { fail(e); } } }, c.status === 'open' ? t('close_chart') : t('open_chart')),
           !c.recs ? h('button', { class: 'sm danger', onclick: async () => { try { await api('DELETE', '/api/charts/' + c.id); viewPatient(id, tab); } catch (e) { fail(e); } } }, t('delete')) : null))))))) : empty(t('no_data')), { flush: true });
-    else if (tab === 'prescripciones' || tab === 'linea') body = await window.HCX.patientTab(tab, { id, refresh: () => viewPatient(id, tab) });
+    else if (tab === 'prescripciones' || tab === 'linea' || tab === 'consignas') body = await window.HCX.patientTab(tab, { id, refresh: () => viewPatient(id, tab) });
     else body = activityPanel(id, act);
     show(h('div', { class: 'pg-title' }, h('button', { class: 'link', onclick: () => { location.hash = '#/'; } }, t('back')), h('span', { class: 'mut' }, patient.code + (patient.archived ? ' · ' + t('archived') : ''))),
-      banner(patient, actions), tabBar([['ficha', t('tab_ficha')], ['asignar', t('tab_asignar')], ['prescripciones', t('tab_presc')], ['linea', t('tab_linea')], ['historias', t('tab_historias'), charts.length], ['actividad', t('tab_actividad'), act.records.length]], tab, base), body);
+      banner(patient, actions), tabBar([['ficha', t('tab_ficha')], ['consignas', t('tab_consignas')], ['asignar', t('tab_asignar')], ['prescripciones', t('tab_presc')], ['linea', t('tab_linea')], ['historias', t('tab_historias'), charts.length], ['actividad', t('tab_actividad'), act.records.length]], tab, base), body);
   }
 
-  function assignPanel(id, charts, uj) {
+  function assignPanel(id, charts, uj, cons) {
     const users = uj.users.filter((u) => u.active), picked = new Set(); let mode = 'individual', q = '', sj = '';
     const list = h('div', { class: 'pick' }), cnt = h('span', { class: 'mut' });
     const assignedIds = new Set(charts.flatMap((c) => c.members.map((m) => m.id)));
@@ -220,14 +220,15 @@
       if (!v.length) list.appendChild(h('div', { class: 'empty' }, t('no_students')));
       cnt.textContent = picked.size + ' ' + t('selected');
     };
+    const consSel = h('select', { 'aria-label': t('cs_assign') }, h('option', { value: '' }, t('cs_pick')), (cons || []).map((k) => h('option', { value: k.id }, k.title)));
     const teamName = h('input', { type: 'text', placeholder: t('team_name') }); const teamField = field(t('team_name'), teamName); teamField.hidden = true;
     const modeSel = h('select', { onchange: (e) => { mode = e.target.value; teamField.hidden = mode !== 'team'; } }, h('option', { value: 'individual' }, t('mode_ind')), h('option', { value: 'team' }, t('mode_team')));
     const sjSel = h('select', { onchange: (e) => { sj = e.target.value; drawList(); } }, h('option', { value: '' }, t('all_subjects')), uj.subjects.map((s) => h('option', { value: s.slug }, s.title)));
     const search = h('input', { type: 'search', placeholder: t('search'), oninput: (e) => { q = e.target.value.toLowerCase(); drawList(); } });
     drawList();
-    return panel(t('assign'), [h('div', { class: 'cols' }, field(t('assign_mode'), modeSel), teamField, field(t('subject'), sjSel), field(t('search'), search)),
+    return panel(t('assign'), [h('div', { class: 'cols' }, field(t('assign_mode'), modeSel), field(t('cs_assign'), consSel), teamField, field(t('subject'), sjSel), field(t('search'), search)),
       h('div', { class: 'row' }, h('button', { onclick: () => { visible().forEach((u) => picked.add(u.id)); drawList(); } }, t('select_all')), h('button', { onclick: () => { picked.clear(); drawList(); } }, '✕'), cnt), h('div', null, list),
-      h('p', { class: 'row' }, h('button', { class: 'pri', onclick: async () => { try { const r = await api('POST', '/api/patients/' + id + '/assign', { mode, team_name: teamName.value, user_ids: [...picked] }); toast(t('assigned') + ': ' + r.created + (r.skipped ? ' · ' + r.skipped + ' ' + t('skipped') : '')); viewPatient(id, 'asignar'); } catch (e) { fail(e); } } }, t('assign_btn')),
+      h('p', { class: 'row' }, h('button', { class: 'pri', onclick: async () => { try { const r = await api('POST', '/api/patients/' + id + '/assign', { mode, team_name: teamName.value, consigna_id: consSel.value || null, user_ids: [...picked] }); toast(t('assigned') + ': ' + r.created + (r.skipped ? ' · ' + r.skipped + ' ' + t('skipped') : '')); viewPatient(id, 'asignar'); } catch (e) { fail(e); } } }, t('assign_btn')),
         h('button', { onclick: async () => { try { const r = await api('POST', '/api/sync'); toast(t('synced') + ': ' + r.students); viewPatient(id, 'asignar'); } catch (e) { fail(e); } } }, t('sync')))]);
   }
   function activityPanel(id, act) {
@@ -388,16 +389,16 @@
 
     const tabs = [['resumen', t('tab_resumen')], ['evolucion', t('tab_evolucion'), byType('nota').length], ['constantes', t('tab_constantes'), byType('constantes').length], ['balance', t('tab_balance'), byType('balance').length], ['cuidados', t('tab_cuidados'), byType('cuidado').length]].concat(window.HCX.extraTabs(X), [['ficha', t('tab_ficha')]]);
     const toolbar = !staff && open ? h('div', { class: 'toolbar row' }, h('b', null, t('tb_record') + ':'), ['nota', 'constantes', 'balance', 'cuidado'].map((ty) => h('button', { class: 'pri sm', onclick: () => openForm(ty) }, '+ ' + t('r_' + ty))), h('button', { class: 'sm', onclick: () => { location.hash = base + '/imprimir'; } }, t('print')))
-      : staff ? h('div', { class: 'toolbar row' }, window.HCX.dayControl(id, c.chart.day, refresh), window.HCX.previewControl(id), c.members.length > 1 ? h('label', { class: 'row' }, t('filter_student') + ':', h('select', { onchange: (e) => { chartUser = e.target.value; refresh(); } }, h('option', { value: '' }, t('all_students')), c.members.map((m) => h('option', { value: m.id, selected: String(m.id) === String(chartUser) }, m.name)))) : null, h('button', { class: 'sm', onclick: () => { location.hash = base + '/imprimir'; } }, t('print'))) : null;
+      : staff ? h('div', { class: 'toolbar row' }, window.HCX.dayControl(id, c.chart.day, refresh), window.HCX.previewControl(id), window.HCX.consignaControl(id, c.consignas, c.chart.consigna_id, refresh), c.members.length > 1 ? h('label', { class: 'row' }, t('filter_student') + ':', h('select', { onchange: (e) => { chartUser = e.target.value; refresh(); } }, h('option', { value: '' }, t('all_students')), c.members.map((m) => h('option', { value: m.id, selected: String(m.id) === String(chartUser) }, m.name)))) : null, h('button', { class: 'sm', onclick: () => { location.hash = base + '/imprimir'; } }, t('print'))) : null;
     const right = [h('span', { class: 'chip' }, c.chart.kind === 'team' ? t('team') + ': ' + c.chart.name : t('individual')), stateChip(open), c.chart.role ? h('span', { class: 'chip gry' }, t('p_' + c.chart.role)) : null];
     show(h('div', { class: 'pg-title' }, h('button', { class: 'link', onclick: () => { history.length > 1 ? history.back() : (location.hash = '#/'); } }, t('back')), c.members.length ? h('span', { class: 'mut' }, t('members') + ': ' + c.members.map((m) => m.name).join(', ')) : null),
-      banner(c.patient, right), tabBar(tabs, tab, base), !open && !staff ? h('div', { class: 'panel warn' }, h('div', { class: 'pb' }, t('chart_closed'))) : null, toolbar, formBox, body);
+      banner(c.patient, right), tabBar(tabs, tab, base), !open && !staff ? h('div', { class: 'panel warn' }, h('div', { class: 'pb' }, t('chart_closed'))) : null, window.HCX.consignaCard(c, tab === 'resumen'), toolbar, formBox, body);
   }
 
   async function viewMine() {
     const { charts } = await api('GET', '/api/my/charts');
     const rows = charts.map((c) => { const age = ageOf(c.nacimiento); return h('tr', { class: 'clk', onclick: () => { location.hash = '#/chart/' + c.id; } },
-      h('td', null, h('a', { href: '#/chart/' + c.id, onclick: (e) => e.stopPropagation() }, c.patient.trim()), c.alergias.length ? h('div', null, h('span', { class: 'al' }, '⚠ ' + c.alergias.join(', '))) : null),
+      h('td', null, h('a', { href: '#/chart/' + c.id, onclick: (e) => e.stopPropagation() }, c.patient.trim()), c.alergias.length ? h('div', null, h('span', { class: 'al' }, '⚠ ' + c.alergias.join(', '))) : null, c.consigna ? h('div', { class: 'sub' }, t('cs_title') + ': ' + c.consigna.title + (c.consigna.total ? ' · ' + c.consigna.done + '/' + c.consigna.total : '')) : null),
       h('td', null, (age !== '' ? age + ' ' + t('age_years') : '') + (c.sexo ? ' / ' + t('sex_' + c.sexo) : '')), h('td', null, [c.unidad, c.habitacion && 'H ' + c.habitacion, c.cama && 'C ' + c.cama].filter(Boolean).join(' / ')), h('td', null, c.diagnostico),
       h('td', null, h('span', { class: 'chip' }, c.kind === 'team' ? t('team') + ': ' + c.name : t('individual'))), h('td', { class: 'r' }, c.mine), h('td', null, stateChip(c.status === 'open'))); });
     show(h('div', { class: 'pg-title' }, h('h1', null, t('nav_mine'))), h('p', { class: 'mut' }, t('mine_intro')),
