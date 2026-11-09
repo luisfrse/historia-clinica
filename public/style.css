@@ -240,3 +240,10 @@ svg.bc .net { font-weight: 700; } svg.bc .net.neg { fill: #a12; }
 .wz-pes { margin: 10px 0; padding: 8px 12px; border-left: 4px solid var(--acc); background: var(--panel); border-radius: var(--rs); max-width: 90ch; }
 .wz-check { list-style: none; padding: 0; margin: 6px 0 10px; } .wz-check .ok { color: #17592b; } .wz-check .bad { color: #a12; }
 .wz-err { margin-top: 8px; color: #a12; } .wz-err ul { margin: 2px 0 0; padding-left: 20px; } .wz-nav { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+
+/* pestaña Alumnado: lista primero, herramientas de gestión al final */
+.panel > summary { justify-content: flex-start; } .panel > summary .chip { margin-left: 4px; }
+.stu-find { width: 100%; max-width: 420px; margin: 0 0 12px; }
+.stu-tools { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); }
+.spgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px 16px; margin-bottom: 10px; }
+.spcell { display: flex; align-items: center; justify-content: space-between; gap: 8px; } .spcell span { min-width: 0; overflow-wrap: anywhere; }

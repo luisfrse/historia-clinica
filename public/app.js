@@ -258,10 +258,13 @@
     const none = students.filter((u) => !u.subjects.some((x) => known.has(x)));
     if (none.length) groups.push([t('no_subject'), none]);
     const sp = j.subjects.length ? h('details', { class: 'panel' }, h('summary', null, t('subj_profiles')), h('div', { class: 'pb' }, h('p', { class: 'mut' }, t('subj_profiles_help')),
-      j.subjects.map((s) => h('div', { class: 'row' }, h('span', null, s.title), h('select', { 'aria-label': s.title, onchange: (e) => { if (e.target.value) map[s.slug] = e.target.value; else delete map[s.slug]; } }, h('option', { value: '' }, '—'), h('option', { value: 'enfermeria', selected: map[s.slug] === 'enfermeria' }, t('p_enfermeria')), h('option', { value: 'tcae', selected: map[s.slug] === 'tcae' }, t('p_tcae'))))),
+      h('div', { class: 'spgrid' }, j.subjects.map((s) => h('label', { class: 'spcell' }, h('span', null, s.title), h('select', { 'aria-label': s.title, onchange: (e) => { if (e.target.value) map[s.slug] = e.target.value; else delete map[s.slug]; } }, h('option', { value: '' }, '—'), h('option', { value: 'enfermeria', selected: map[s.slug] === 'enfermeria' }, t('p_enfermeria')), h('option', { value: 'tcae', selected: map[s.slug] === 'tcae' }, t('p_tcae')))))),
       h('p', null, h('button', { onclick: async () => { try { await api('PUT', '/api/subject-profiles', { map }); toast(t('ok')); } catch (er) { fail(er); } } }, t('save'))))) : null;
-    show(h('div', { class: 'pg-title' }, h('h1', null, t('nav_students')), h('button', { onclick: async () => { try { const r = await api('POST', '/api/sync'); toast(t('synced') + ': ' + r.students); viewStudents(); } catch (e) { fail(e); } } }, t('sync'))),
-      ME.role === 'admin' ? window.HCX.teachersPanel(teachers, () => viewStudents()) : null, window.HCX.dataPanel(pl), sp, students.length ? groups.map((g) => groupCard(g[0], g[1])) : panel(null, empty(t('no_students'))));
+    const find = h('input', { type: 'search', class: 'stu-find', placeholder: t('search'), 'aria-label': t('search'), oninput: (e) => { const q = e.target.value.toLowerCase(); document.querySelectorAll('.stu-groups tbody tr').forEach((tr) => { tr.hidden = !!q && !tr.textContent.toLowerCase().includes(q); }); } });
+    const tools = [ME.role === 'admin' ? window.HCX.teachersPanel(teachers, () => viewStudents()) : null, window.HCX.dataPanel(pl), sp].filter(Boolean);
+    show(h('div', { class: 'pg-title' }, h('h1', null, t('nav_students'), ' ', h('span', { class: 'chip' }, students.length)), h('button', { onclick: async () => { try { const r = await api('POST', '/api/sync'); toast(t('synced') + ': ' + r.students); viewStudents(); } catch (e) { fail(e); } } }, t('sync'))),
+      students.length ? [find, h('div', { class: 'stu-groups' }, groups.map((g) => groupCard(g[0], g[1])))] : panel(null, empty(t('no_students'))),
+      h('div', { class: 'stu-tools' }, tools));
   }
 
   async function viewCatalog() {
