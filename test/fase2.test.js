@@ -6,14 +6,17 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'hc2-')); process.env.SSO_SECRET = 'secreto-de-prueba'; process.env.ADMIN_PASSWORD = 'clave-admin-larga';
+process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'hc2-')); process.env.SSO_SECRET = 'secreto-de-prueba'; process.env.ADMIN_PASSWORD = 'clave-admin-larga'; process.env.CAMPUS_URL = 'http://127.0.0.1:47123'; process.env.CAMPUS_TOKEN = 'tok-campus';
 const SSO = require('../lib/sso');
 const SC = require('../public/scales');
 const { server } = require('../server');
+const http = require('http');
+let campusGot = null;
+const fakeCampus = http.createServer((req, res) => { let b = ''; req.on('data', (d) => { b += d; }); req.on('end', () => { campusGot = { url: req.url, auth: req.headers.authorization, body: b ? JSON.parse(b) : null }; res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: true, created: true, saved: campusGot.body ? campusGot.body.grades.length : 0, kept: 0, missing: [] })); }); });
 
 let base;
-test.before(async () => { await new Promise((r) => server.listen(0, r)); base = 'http://127.0.0.1:' + server.address().port; });
-test.after(() => { server.close(); });
+test.before(async () => { await new Promise((r) => fakeCampus.listen(47123, '127.0.0.1', r)); await new Promise((r) => server.listen(0, r)); base = 'http://127.0.0.1:' + server.address().port; });
+test.after(() => { server.close(); fakeCampus.close(); });
 async function call(method, url, body, cookie) {
   const r = await fetch(base + url, { method, redirect: 'manual', headers: Object.assign({ 'X-Requested-With': 'historia', 'Content-Type': 'application/json' }, cookie ? { Cookie: cookie } : {}), body: body ? JSON.stringify(body) : undefined });
   let j = null; try { j = await r.json(); } catch (_) {}
@@ -117,4 +120,16 @@ test('profesorado adicional: solo la administración lo nombra', async () => {
   assert.strictEqual((await call('GET', '/api/patients', null, enf)).status, 200, 'ya es profesorado');
   assert.strictEqual((await call('PUT', '/api/users/' + ue.id + '/role', { role: 'student' }, admin)).status, 200);
   assert.strictEqual((await call('GET', '/api/patients', null, enf)).status, 403);
+});
+
+test('enviar notas publicadas al Campus', async () => {
+  const body = { slug: 'cuidados', kind: 'practica', ra_id: 3, weight: 2, title: 'Caso EPOC' };
+  assert.strictEqual((await call('POST', '/api/charts/' + cEnf + '/send-campus', body, enf)).status, 403, 'el alumnado no puede');
+  assert.strictEqual((await call('POST', '/api/charts/' + cEnf + '/send-campus', Object.assign({}, body, { kind: '' }), admin)).status, 400, 'la categoría es obligatoria');
+  const r = await call('POST', '/api/charts/' + cEnf + '/send-campus', body, admin);
+  assert.strictEqual(r.status, 200); assert.strictEqual(r.json.saved, 1);
+  assert.strictEqual(campusGot.url, '/api/historia/grades'); assert.strictEqual(campusGot.auth, 'Bearer tok-campus');
+  assert.strictEqual(campusGot.body.kind, 'practica'); assert.strictEqual(campusGot.body.key, 'hc-chart-' + cEnf);
+  assert.deepStrictEqual(campusGot.body.grades.map((g) => g.email), ['enf@x.com']);
+  assert.strictEqual((await call('POST', '/api/charts/' + cAux + '/send-campus', body, admin)).status, 400, 'sin notas publicadas');
 });

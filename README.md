@@ -35,7 +35,7 @@ Todos los datos de pacientes deben ser **ficticios**.
 | `ADMIN_PASSWORD` | Historia | Opcional: acceso de administración directo sin pasar por el Campus. |
 | `HISTORIA_URL` | Campus | `https://historia.luisfs.com` (activa el botón en Mi espacio). |
 | `HISTORIA_SSO_SECRET` | Campus | El secreto de firma. |
-| `HISTORIA_TOKEN` | Campus | Token para `GET /api/historia/roster`. |
+| `HISTORIA_TOKEN` | Campus | Token para `GET /api/historia/roster` y `POST /api/historia/grades`. |
 
 ## Despliegue en Coolify
 
@@ -64,10 +64,9 @@ npm start       # http://localhost:3000 (usa ADMIN_PASSWORD=... para entrar sin 
 - **Medicación (MAR)**: el profesorado prescribe por paciente (fármaco, dosis, vía, horas, desde/hasta día); el alumnado registra administraciones con la comprobación de los cinco correctos. El perfil TCAE solo puede registrar vía oral y tópica.
 - **Escalas** Barthel, Braden, Norton, Glasgow y Downton, con puntuación y nivel calculados en el servidor. **Valoración** por los 11 patrones de Gordon. **Plan de cuidados**: problema, causa, objetivo, intervenciones y evaluación. Estos registros son solo del perfil de enfermería.
 - **Línea temporal por días**: cada historia tiene un día del caso que avanza el profesorado; pruebas, eventos y prescripciones se liberan al alumnado según ese día.
-- **Evaluación**: rúbrica editable (criterios 0–4 con peso), nota 0–10 por alumno y caso, publicada o no al alumnado, y exportación CSV (pestaña Notas).
+- **Evaluación**: rúbrica editable (criterios 0–4 con peso), nota 0–10 por alumno y caso, publicada o no al alumnado, exportación CSV y botón **Enviar al Campus** (pestaña Notas): elige asignatura, categoría (teoría, prácticas o seguimiento, obligatoria), unidad (RA) y peso, y crea en el Campus una prueba oculta con la nota de cada alumno con nota publicada. Reenviar actualiza la misma prueba sin tocar la categoría/unidad/peso ni las notas editadas a mano en el Campus. Las unidades se cargan con "Sincronizar" en Usuarios.
 - **Impresión**: la historia completa se imprime o se guarda en PDF desde el navegador.
 - **Profesorado adicional**: la administración puede dar acceso de profesorado a cualquier usuario desde Alumnado.
 
 ## Pendiente
 
-- Enviar las notas directamente a la hoja de notas del Campus (hoy se exportan en CSV).

@@ -288,7 +288,7 @@ R('POST', '/api/sync', async (req, res, ctx) => {
   } catch (e) { return bad(res, 'No se pudo contactar con el Campus.', 502); }
   let n = 0;
   db.tx(() => {
-    db.setSetting('campus_subjects', JSON.stringify((j.subjects || []).map((s) => ({ slug: U.clip(s.slug, 80), title: U.clip(s.title, 160) }))));
+    db.setSetting('campus_subjects', JSON.stringify((j.subjects || []).map((s) => ({ slug: U.clip(s.slug, 80), title: U.clip(s.title, 160), ras: (Array.isArray(s.ras) ? s.ras : []).slice(0, 60).map((r) => ({ id: intId(r.id), code: U.clip(r.code, 20), title: U.clip(r.title, 160) })) }))));
     for (const s of (j.students || []).slice(0, 5000)) { if (!U.validEmail(String(s.email || ''))) continue; upsertUser(s.email, s.name, s.lang, (s.subjects || []).map((x) => U.clip(x, 80)), 'student'); n++; }
   });
   audit(ctx.user.email, 'sincronizar-campus', n + ' alumnos');
@@ -465,10 +465,26 @@ R('PUT', '/api/charts/:id/grades/:uid', async (req, res, ctx) => {
   audit(ctx.user.email, 'nota', '#' + c.id + ' alumno ' + uid + ' = ' + total + (b.published ? ' (publicada)' : ''));
   json(res, 200, { ok: true, total });
 }, { staff: true });
-const GRADE_SQL = 'SELECT g.*, u.name, u.email, c.name chart_name, c.kind, p.code, p.data pdata FROM grades g JOIN users u ON u.id = g.user_id JOIN charts c ON c.id = g.chart_id JOIN patients p ON p.id = c.patient_id ORDER BY p.id, c.id, u.name COLLATE NOCASE';
+const GRADE_SQL = 'SELECT g.*, u.name, u.email, u.subjects usubs, c.name chart_name, c.kind, p.code, p.data pdata FROM grades g JOIN users u ON u.id = g.user_id JOIN charts c ON c.id = g.chart_id JOIN patients p ON p.id = c.patient_id ORDER BY p.id, c.id, u.name COLLATE NOCASE';
 R('GET', '/api/grades', async (req, res) => {
   const rows = db.all(GRADE_SQL);
-  json(res, 200, { rubric: getRubric(), grades: rows.map((r) => Object.assign(gradeOut(r), { chart_id: r.chart_id, name: r.name, email: r.email, chart: r.chart_name, kind: r.kind, code: r.code, patient: JSON.parse(r.pdata).apellidos || '' })) });
+  json(res, 200, { rubric: getRubric(), campus: JSON.parse(db.getSetting('campus_subjects', '[]')), grades: rows.map((r) => Object.assign(gradeOut(r), { subjects: JSON.parse(r.usubs || '[]'), chart_id: r.chart_id, name: r.name, email: r.email, chart: r.chart_name, kind: r.kind, code: r.code, patient: JSON.parse(r.pdata).apellidos || '' })) });
+}, { staff: true });
+R('POST', '/api/charts/:id/send-campus', async (req, res, ctx) => {
+  if (!CAMPUS_TOKEN) return bad(res, 'Falta CAMPUS_TOKEN en el entorno.', 503);
+  const c = db.get('SELECT c.*, p.code, p.data pdata FROM charts c JOIN patients p ON p.id = c.patient_id WHERE c.id = ?', intId(ctx.params.id)); if (!c) return bad(res, 'notfound', 404);
+  const b = await readJson(req, 4e3), slug = U.clip(b.slug, 80), title = U.clip(b.title, 160), kind = ['teoria', 'practica', 'seguimiento'].includes(b.kind) ? b.kind : '';
+  if (!slug || !title || !kind) return bad(res, 'Elige asignatura, categoría y título.');
+  const rows = db.all('SELECT g.total, u.email FROM grades g JOIN users u ON u.id = g.user_id WHERE g.chart_id = ? AND g.published = 1 AND g.total IS NOT NULL', c.id);
+  if (!rows.length) return bad(res, 'No hay notas publicadas en esta historia.');
+  let r, j;
+  try {
+    r = await fetch(CAMPUS_URL + '/api/historia/grades', { method: 'POST', headers: { Authorization: 'Bearer ' + CAMPUS_TOKEN, 'Content-Type': 'application/json' }, body: JSON.stringify({ slug, key: 'hc-chart-' + c.id, title, kind, ra_id: b.ra_id || null, weight: b.weight, grades: rows.map((x) => ({ email: x.email, grade: x.total })) }), signal: AbortSignal.timeout(20000) });
+    j = await r.json().catch(() => ({}));
+  } catch (e) { return bad(res, 'No se pudo contactar con el Campus.', 502); }
+  if (!r.ok) return bad(res, j.msg || 'El Campus respondió ' + r.status, 502);
+  audit(ctx.user.email, 'enviar-notas-campus', '#' + c.id + ' → ' + slug + ' (' + j.saved + ' notas)');
+  json(res, 200, j);
 }, { staff: true });
 const csvCell = (v) => { let s = String(v == null ? '' : v); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };
 R('GET', '/api/grades.csv', async (req, res) => {
