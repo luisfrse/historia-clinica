@@ -211,10 +211,14 @@
     const users = uj.users.filter((u) => u.active), picked = new Set(); let mode = 'individual', q = '', sj = '';
     const list = h('div', { class: 'pick' }), cnt = h('span', { class: 'mut' });
     const assignedIds = new Set(charts.flatMap((c) => c.members.map((m) => m.id)));
-    const visible = () => users.filter((u) => (!sj || u.subjects.includes(sj)) && (!q || (u.name + ' ' + u.email).toLowerCase().includes(q)));
+    let fg = '', fs = '', fh = '';
+    const enrOf = (u) => (u.enr || []).find((e) => e.slug === sj);
+    const visible = () => users.filter((u) => (!sj || u.subjects.includes(sj)) && (!q || (u.name + ' ' + u.email).toLowerCase().includes(q))
+      && (!sj || ((!fg || (enrOf(u) || {}).grp === fg) && (!fs || String((enrOf(u) || {}).sub) === fs) && (!fh || (enrOf(u) || {}).half === fh))));
+    const tagOf = (u) => { const e = sj && enrOf(u); return e ? [e.grp ? e.grp + (e.sub || '') : (e.sub ? '#' + e.sub : ''), e.half ? t('half') + ' ' + e.half : ''].filter(Boolean).join(' · ') : ''; };
     const drawList = () => {
       clear(list); const v = visible();
-      v.forEach((u) => list.appendChild(h('label', null, h('input', { type: 'checkbox', checked: picked.has(u.id), onchange: (e) => { e.target.checked ? picked.add(u.id) : picked.delete(u.id); cnt.textContent = picked.size + ' ' + t('selected'); } }), u.name, h('span', { class: 'chip' }, t('p_' + u.profile)), assignedIds.has(u.id) ? h('span', { class: 'chip grn' }, '✓') : null)));
+      v.forEach((u) => list.appendChild(h('label', null, h('input', { type: 'checkbox', checked: picked.has(u.id), onchange: (e) => { e.target.checked ? picked.add(u.id) : picked.delete(u.id); cnt.textContent = picked.size + ' ' + t('selected'); } }), u.name, h('span', { class: 'chip' }, t('p_' + u.profile)), tagOf(u) ? h('span', { class: 'chip' }, tagOf(u)) : null, assignedIds.has(u.id) ? h('span', { class: 'chip grn' }, '✓') : null)));
       if (!v.length) list.appendChild(h('div', { class: 'empty' }, t('no_students')));
       cnt.textContent = picked.size + ' ' + t('selected');
     };
@@ -223,10 +227,21 @@
     const paceSel = h('select', { 'aria-label': t('pace_title') }, h('option', { value: 'teacher' }, t('pace_teacher')), h('option', { value: 'student' }, t('pace_student'))), capIn = h('input', { type: 'number', min: 1, max: 60, 'aria-label': t('pace_cap'), placeholder: t('pace_auto') });
     const teamName = h('input', { type: 'text', placeholder: t('team_name') }); const teamField = field(t('team_name'), teamName); teamField.hidden = true;
     const modeSel = h('select', { onchange: (e) => { mode = e.target.value; teamField.hidden = mode !== 'team'; } }, h('option', { value: 'individual' }, t('mode_ind')), h('option', { value: 'team' }, t('mode_team')));
-    const sjSel = h('select', { onchange: (e) => { sj = e.target.value; drawList(); } }, h('option', { value: '' }, t('all_subjects')), uj.subjects.map((s) => h('option', { value: s.slug }, s.title)));
+    const mkSel = (label, set) => { const sel = h('select', { 'aria-label': label, onchange: (e) => { set(e.target.value); drawList(); } }); const f = field(label, sel); f.hidden = true; return { sel, f }; };
+    const gSel = mkSel(t('f_group'), (v) => { fg = v; }), sSel = mkSel(t('f_sub'), (v) => { fs = v; }), hSel = mkSel(t('f_half'), (v) => { fh = v; });
+    const fillFilters = () => { /* opciones según el alumnado matriculado en la asignatura elegida */
+      fg = fs = fh = '';
+      const es = users.map(enrOf).filter(Boolean);
+      for (const [x, key, num] of [[gSel, 'grp', false], [sSel, 'sub', true], [hSel, 'half', false]]) {
+        const vals = [...new Set(es.map((e) => String(e[key] || '')).filter(Boolean))].sort((a, b) => (num ? a - b : a.localeCompare(b)));
+        clear(x.sel); x.sel.appendChild(h('option', { value: '' }, t('f_all'))); vals.forEach((v) => x.sel.appendChild(h('option', { value: v }, v)));
+        x.f.hidden = !sj || !vals.length;
+      }
+    };
+    const sjSel = h('select', { onchange: (e) => { sj = e.target.value; fillFilters(); drawList(); } }, h('option', { value: '' }, t('all_subjects')), uj.subjects.map((s) => h('option', { value: s.slug }, s.title)));
     const search = h('input', { type: 'search', placeholder: t('search'), oninput: (e) => { q = e.target.value.toLowerCase(); drawList(); } });
     drawList();
-    return panel(t('assign'), [h('div', { class: 'cols' }, field(t('assign_mode'), modeSel), field(t('cs_assign'), consSel), field(t('win_from'), winFrom), field(t('win_to'), winTo), field(t('pace_title'), paceSel), field(t('pace_cap'), capIn), teamField, field(t('subject'), sjSel), field(t('search'), search)),
+    return panel(t('assign'), [h('div', { class: 'cols' }, field(t('assign_mode'), modeSel), field(t('cs_assign'), consSel), field(t('win_from'), winFrom), field(t('win_to'), winTo), field(t('pace_title'), paceSel), field(t('pace_cap'), capIn), teamField, field(t('subject'), sjSel), gSel.f, sSel.f, hSel.f, field(t('search'), search)),
       h('div', { class: 'row' }, h('button', { onclick: () => { visible().forEach((u) => picked.add(u.id)); drawList(); } }, t('select_all')), h('button', { onclick: () => { picked.clear(); drawList(); } }, '✕'), cnt), h('div', null, list),
       h('p', { class: 'row' }, h('button', { class: 'pri', onclick: async () => { try { const r = await api('POST', '/api/patients/' + id + '/assign', { mode, team_name: teamName.value, consigna_id: consSel.value || null, opens: winFrom.value, closes: winTo.value, pace: paceSel.value, max_day: capIn.value || null, user_ids: [...picked] }); toast(t('assigned') + ': ' + r.created + (r.skipped ? ' · ' + r.skipped + ' ' + t('skipped') : '')); viewPatient(id, 'asignar'); } catch (e) { fail(e); } } }, t('assign_btn')),
         h('button', { onclick: async () => { try { const r = await api('POST', '/api/sync'); toast(t('synced') + ': ' + r.students); viewPatient(id, 'asignar'); } catch (e) { fail(e); } } }, t('sync')))]);

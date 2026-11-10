@@ -78,16 +78,19 @@ const profileFromSubjects = (subs) => {
   if (!ps.length) return null;
   return ps.includes('enfermeria') ? 'enfermeria' : 'tcae';
 };
-function upsertUser(email, name, lang, subjects, role) {
+function upsertUser(email, name, lang, subjects, role, enr) {
   email = String(email).toLowerCase().trim();
   const subs = JSON.stringify((subjects || []).slice(0, 60));
   let u = db.get('SELECT * FROM users WHERE email = ?', email);
   if (!u) {
     const r = db.run('INSERT INTO users (email, name, role, profile, lang, subjects, created) VALUES (?,?,?,?,?,?,?)', email, U.clip(name, 120), role, profileFromSubjects(subjects) || 'enfermeria', lang === 'ca' ? 'ca' : 'es', subs, new Date().toISOString());
-    return db.get('SELECT * FROM users WHERE id = ?', Number(r.lastInsertRowid));
-  }
+    u = db.get('SELECT * FROM users WHERE id = ?', Number(r.lastInsertRowid));
+    if (!Array.isArray(enr)) return u;
+  } else {
   const prof = !u.profile_manual && role === 'student' ? (profileFromSubjects(subjects) || u.profile) : u.profile;
   db.run('UPDATE users SET name = ?, subjects = ?, profile = ?, role = CASE WHEN role IN (\'teacher\', \'admin\') AND ? = \'student\' THEN role ELSE ? END WHERE id = ?', U.clip(name, 120) || u.name, subs, prof, role, role, u.id);
+  }
+  if (Array.isArray(enr)) db.run('UPDATE users SET enr = ? WHERE id = ?', JSON.stringify(enr.slice(0, 60).map((e) => ({ slug: U.clip(e.slug, 80), grp: U.clip(e.grp, 4), sub: U.clip(String(e.sub || ''), 4), half: U.clip(e.half, 2) }))), u.id);
   return db.get('SELECT * FROM users WHERE id = ?', u.id);
 }
 
@@ -340,9 +343,9 @@ R('DELETE', '/api/charts/:id/members/:uid', async (req, res, ctx) => {
 /* --- alumnado --- */
 R('GET', '/api/users', async (req, res, ctx) => {
   const q = U.normName(ctx.url.searchParams.get('q') || '');
-  let rows = db.all("SELECT id, name, email, role, profile, profile_manual, lang, subjects, active, last_login FROM users WHERE role != 'admin' AND email NOT LIKE '%@historia.local' ORDER BY name COLLATE NOCASE");
+  let rows = db.all("SELECT id, name, email, role, profile, profile_manual, lang, subjects, enr, active, last_login FROM users WHERE role != 'admin' AND email NOT LIKE '%@historia.local' ORDER BY name COLLATE NOCASE");
   if (q) rows = rows.filter((r) => U.normName(r.name + ' ' + r.email).includes(q));
-  json(res, 200, { users: rows.slice(0, 1000).map((r) => Object.assign(r, { subjects: JSON.parse(r.subjects) })), subject_profiles: JSON.parse(db.getSetting('subject_profiles', '{}')), subjects: JSON.parse(db.getSetting('campus_subjects', '[]')) });
+  json(res, 200, { users: rows.slice(0, 1000).map((r) => Object.assign(r, { subjects: JSON.parse(r.subjects), enr: JSON.parse(r.enr || '[]') })), subject_profiles: JSON.parse(db.getSetting('subject_profiles', '{}')), subjects: JSON.parse(db.getSetting('campus_subjects', '[]')) });
 }, { staff: true });
 R('PUT', '/api/users/:id', async (req, res, ctx) => {
   const u = db.get("SELECT * FROM users WHERE id = ? AND role != 'admin'", intId(ctx.params.id)); if (!u) return bad(res, 'notfound', 404);
@@ -370,7 +373,7 @@ R('POST', '/api/sync', async (req, res, ctx) => {
   let n = 0;
   db.tx(() => {
     db.setSetting('campus_subjects', JSON.stringify((j.subjects || []).map((s) => ({ slug: U.clip(s.slug, 80), title: U.clip(s.title, 160), ras: (Array.isArray(s.ras) ? s.ras : []).slice(0, 60).map((r) => ({ id: intId(r.id), code: U.clip(r.code, 20), title: U.clip(r.title, 160) })) }))));
-    for (const s of (j.students || []).slice(0, 5000)) { if (!U.validEmail(String(s.email || ''))) continue; upsertUser(s.email, s.name, s.lang, (s.subjects || []).map((x) => U.clip(x, 80)), 'student'); n++; }
+    for (const s of (j.students || []).slice(0, 5000)) { if (!U.validEmail(String(s.email || ''))) continue; upsertUser(s.email, s.name, s.lang, (s.subjects || []).map((x) => U.clip(x, 80)), 'student', Array.isArray(s.enr) ? s.enr : undefined); n++; }
   });
   audit(ctx.user.email, 'sincronizar-campus', n + ' alumnos');
   json(res, 200, { ok: true, students: n });
