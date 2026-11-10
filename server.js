@@ -291,9 +291,13 @@ R('POST', '/api/patients/:id/assign', async (req, res, ctx) => {
   db.tx(() => {
     if (b.mode === 'team') {
       const name = U.clip(b.team_name, 80) || 'Equipo';
-      const r = db.run("INSERT INTO charts (patient_id, kind, name, consigna_id, opens, closes, pace, max_day, start_date, created) VALUES (?,'team',?,?,?,?,?,?,?,?)", p.id, name, cid, win.opens, win.closes, pace, maxDay, startD, new Date().toISOString());
-      users.forEach((u) => db.run('INSERT INTO chart_members (chart_id, user_id, role) VALUES (?,?,?)', Number(r.lastInsertRowid), u.id, u.profile));
-      out.created = 1;
+      const mkTeam = (nm, us) => { const r = db.run("INSERT INTO charts (patient_id, kind, name, consigna_id, opens, closes, pace, max_day, start_date, created) VALUES (?,'team',?,?,?,?,?,?,?,?)", p.id, nm, cid, win.opens, win.closes, pace, maxDay, startD, new Date().toISOString());
+        us.forEach((u) => db.run('INSERT INTO chart_members (chart_id, user_id, role) VALUES (?,?,?)', Number(r.lastInsertRowid), u.id, u.profile)); out.created++; };
+      if (b.team_by === 'sub') { /* el mismo caso, un equipo por subgrupo del Campus (p. ej. grupo A → subgrupos 1–4) */
+        const slug = U.clip(b.subject, 80); const teams = new Map();
+        for (const u of users) { let e = []; try { e = JSON.parse(u.enr || '[]'); } catch (_) { /* sin datos */ } const m = e.find((x) => x.slug === slug && x.sub); if (!m) { out.skipped++; continue; } const k = (m.grp || '') + m.sub; if (!teams.has(k)) teams.set(k, []); teams.get(k).push(u); }
+        [...teams.entries()].sort((a, c) => a[0].localeCompare(c[0], undefined, { numeric: true })).forEach(([k, us]) => mkTeam(name + ' ' + k, us));
+      } else mkTeam(name, users);
     } else {
       for (const u of users) {
         if (db.get("SELECT 1 x FROM charts c JOIN chart_members m ON m.chart_id = c.id WHERE c.patient_id = ? AND m.user_id = ? AND c.kind = 'individual'", p.id, u.id)) { out.skipped++; continue; }

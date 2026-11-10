@@ -208,42 +208,53 @@
   }
 
   function assignPanel(id, charts, uj, cons) {
-    const users = uj.users.filter((u) => u.active), picked = new Set(); let mode = 'individual', q = '', sj = '';
-    const list = h('div', { class: 'pick' }), cnt = h('span', { class: 'mut' });
+    const users = uj.users.filter((u) => u.active), picked = new Set(); let mode = 'individual', q = '', sj = '', fg = '', fs = '', fh = '', teamBy = 'one';
+    const list = h('div', { class: 'pick' }), cnt = h('span', { class: 'mut' }), preview = h('p', { class: 'mut', hidden: true });
     const assignedIds = new Set(charts.flatMap((c) => c.members.map((m) => m.id)));
-    let fg = '', fs = '', fh = '';
-    const enrOf = (u) => (u.enr || []).find((e) => e.slug === sj);
-    const visible = () => users.filter((u) => (!sj || u.subjects.includes(sj)) && (!q || (u.name + ' ' + u.email).toLowerCase().includes(q))
-      && (!sj || ((!fg || (enrOf(u) || {}).grp === fg) && (!fs || String((enrOf(u) || {}).sub) === fs) && (!fh || (enrOf(u) || {}).half === fh))));
-    const tagOf = (u) => { const e = sj && enrOf(u); return e ? [e.grp ? e.grp + (e.sub || '') : (e.sub ? '#' + e.sub : ''), e.half ? t('half') + ' ' + e.half : ''].filter(Boolean).join(' · ') : ''; };
+    const subjTitle = (slug) => (uj.subjects.find((x) => x.slug === slug) || {}).title || slug;
+    const enrs = (u) => (u.enr || []).filter((e) => !sj || e.slug === sj);              /* matrículas que cuentan según la asignatura elegida */
+    const okEnr = (e, g, s, hf) => (!g || e.grp === g) && (!s || String(e.sub) === s) && (!hf || e.half === hf);
+    const visible = () => users.filter((u) => (!sj || u.subjects.includes(sj)) && (!q || (u.name + ' ' + u.email).toLowerCase().includes(q)) && (!(fg || fs || fh) || enrs(u).some((e) => okEnr(e, fg, fs, fh))));
+    const code = (e) => (e.grp ? e.grp + (e.sub || '') : (e.sub ? '#' + e.sub : '')) + (e.half ? (e.grp || e.sub ? ' · ' : '') + t('half') + ' ' + e.half : '');
+    const tagsOf = (u) => enrs(u).filter((e) => e.grp || e.sub || e.half).map((e) => (sj ? '' : subjTitle(e.slug) + ': ') + code(e));
+    const teamsOf = (us) => { const m = new Map(); for (const u of us) { const e = enrs(u).find((x) => x.sub); const k = e ? (e.grp || '') + e.sub : ''; if (!m.has(k)) m.set(k, []); m.get(k).push(u); } return m; };
+    const refreshInfo = () => {
+      cnt.textContent = picked.size + ' ' + t('selected');
+      const byTeam = mode === 'team' && teamBy === 'sub'; preview.hidden = !byTeam; if (!byTeam) return;
+      const m = teamsOf(users.filter((u) => picked.has(u.id))), nos = m.get('') ? m.get('').length : 0;
+      preview.textContent = !sj ? t('team_need_subj') : (m.size - (nos ? 1 : 0)) + ' ' + t('teams_n') + ': ' + [...m.entries()].filter(([k]) => k).sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true })).map(([k, v]) => k + ' (' + v.length + ')').join(', ') + (nos ? ' · ' + nos + ' ' + t('no_sub') : '');
+    };
     const drawList = () => {
       clear(list); const v = visible();
-      v.forEach((u) => list.appendChild(h('label', null, h('input', { type: 'checkbox', checked: picked.has(u.id), onchange: (e) => { e.target.checked ? picked.add(u.id) : picked.delete(u.id); cnt.textContent = picked.size + ' ' + t('selected'); } }), u.name, h('span', { class: 'chip' }, t('p_' + u.profile)), tagOf(u) ? h('span', { class: 'chip' }, tagOf(u)) : null, assignedIds.has(u.id) ? h('span', { class: 'chip grn' }, '✓') : null)));
+      v.forEach((u) => list.appendChild(h('label', null, h('input', { type: 'checkbox', checked: picked.has(u.id), onchange: (e) => { e.target.checked ? picked.add(u.id) : picked.delete(u.id); refreshInfo(); } }), u.name, h('span', { class: 'chip' }, t('p_' + u.profile)), tagsOf(u).map((x) => h('span', { class: 'chip' }, x)), assignedIds.has(u.id) ? h('span', { class: 'chip grn' }, '✓') : null)));
       if (!v.length) list.appendChild(h('div', { class: 'empty' }, t('no_students')));
-      cnt.textContent = picked.size + ' ' + t('selected');
+      refreshInfo();
     };
     const consSel = h('select', { 'aria-label': t('cs_assign') }, h('option', { value: '' }, t('cs_pick')), (cons || []).map((k) => h('option', { value: k.id }, k.title)));
     const winFrom = h('input', { type: 'date', 'aria-label': t('win_from') }), winTo = h('input', { type: 'date', 'aria-label': t('win_to') });
     const paceSel = h('select', { 'aria-label': t('pace_title') }, h('option', { value: 'teacher' }, t('pace_teacher')), h('option', { value: 'student' }, t('pace_student'))), capIn = h('input', { type: 'number', min: 1, max: 60, 'aria-label': t('pace_cap'), placeholder: t('pace_auto') });
     const teamName = h('input', { type: 'text', placeholder: t('team_name') }); const teamField = field(t('team_name'), teamName); teamField.hidden = true;
-    const modeSel = h('select', { onchange: (e) => { mode = e.target.value; teamField.hidden = mode !== 'team'; } }, h('option', { value: 'individual' }, t('mode_ind')), h('option', { value: 'team' }, t('mode_team')));
-    const mkSel = (label, set) => { const sel = h('select', { 'aria-label': label, onchange: (e) => { set(e.target.value); drawList(); } }); const f = field(label, sel); f.hidden = true; return { sel, f }; };
-    const gSel = mkSel(t('f_group'), (v) => { fg = v; }), sSel = mkSel(t('f_sub'), (v) => { fs = v; }), hSel = mkSel(t('f_half'), (v) => { fh = v; });
-    const fillFilters = () => { /* opciones según el alumnado matriculado en la asignatura elegida */
-      fg = fs = fh = '';
-      const es = users.map(enrOf).filter(Boolean);
-      for (const [x, key, num] of [[gSel, 'grp', false], [sSel, 'sub', true], [hSel, 'half', false]]) {
+    const teamBySel = h('select', { 'aria-label': t('team_by'), onchange: (e) => { teamBy = e.target.value; refreshInfo(); } }, h('option', { value: 'one' }, t('team_by_one')), h('option', { value: 'sub' }, t('team_by_sub'))); const teamByField = field(t('team_by'), teamBySel); teamByField.hidden = true;
+    const modeSel = h('select', { onchange: (e) => { mode = e.target.value; teamField.hidden = teamByField.hidden = mode !== 'team'; refreshInfo(); } }, h('option', { value: 'individual' }, t('mode_ind')), h('option', { value: 'team' }, t('mode_team')));
+    const mk = (label, set) => { const sel = h('select', { 'aria-label': label, onchange: (e) => { set(e.target.value); fillFilters(); drawList(); } }); const f = field(label, sel); f.hidden = true; return { sel, f }; };
+    const gSel = mk(t('f_group'), (v) => { fg = v; fs = ''; }), sSel = mk(t('f_sub'), (v) => { fs = v; }), hSel = mk(t('f_half'), (v) => { fh = v; });
+    const fillFilters = () => { /* opciones según el alumnado matriculado (de la asignatura elegida, o de todas); el subgrupo se acota al grupo elegido */
+      const all = users.flatMap((u) => enrs(u));
+      for (const [x, key, num, cur] of [[gSel, 'grp', false, fg], [sSel, 'sub', true, fs], [hSel, 'half', false, fh]]) {
+        const es = key === 'sub' && fg ? all.filter((e) => e.grp === fg) : all;
         const vals = [...new Set(es.map((e) => String(e[key] || '')).filter(Boolean))].sort((a, b) => (num ? a - b : a.localeCompare(b)));
-        clear(x.sel); x.sel.appendChild(h('option', { value: '' }, t('f_all'))); vals.forEach((v) => x.sel.appendChild(h('option', { value: v }, v)));
-        x.f.hidden = !sj || !vals.length;
+        clear(x.sel); x.sel.appendChild(h('option', { value: '' }, t('f_all'))); vals.forEach((v) => x.sel.appendChild(h('option', { value: v, selected: v === cur }, v))); x.f.hidden = !vals.length;
       }
     };
-    const sjSel = h('select', { onchange: (e) => { sj = e.target.value; fillFilters(); drawList(); } }, h('option', { value: '' }, t('all_subjects')), uj.subjects.map((s) => h('option', { value: s.slug }, s.title)));
+    const sjSel = h('select', { onchange: (e) => { sj = e.target.value; fg = fs = fh = ''; fillFilters(); drawList(); } }, h('option', { value: '' }, t('all_subjects')), uj.subjects.map((s) => h('option', { value: s.slug }, s.title)));
     const search = h('input', { type: 'search', placeholder: t('search'), oninput: (e) => { q = e.target.value.toLowerCase(); drawList(); } });
-    drawList();
-    return panel(t('assign'), [h('div', { class: 'cols' }, field(t('assign_mode'), modeSel), field(t('cs_assign'), consSel), field(t('win_from'), winFrom), field(t('win_to'), winTo), field(t('pace_title'), paceSel), field(t('pace_cap'), capIn), teamField, field(t('subject'), sjSel), gSel.f, sSel.f, hSel.f, field(t('search'), search)),
-      h('div', { class: 'row' }, h('button', { onclick: () => { visible().forEach((u) => picked.add(u.id)); drawList(); } }, t('select_all')), h('button', { onclick: () => { picked.clear(); drawList(); } }, '✕'), cnt), h('div', null, list),
-      h('p', { class: 'row' }, h('button', { class: 'pri', onclick: async () => { try { const r = await api('POST', '/api/patients/' + id + '/assign', { mode, team_name: teamName.value, consigna_id: consSel.value || null, opens: winFrom.value, closes: winTo.value, pace: paceSel.value, max_day: capIn.value || null, user_ids: [...picked] }); toast(t('assigned') + ': ' + r.created + (r.skipped ? ' · ' + r.skipped + ' ' + t('skipped') : '')); viewPatient(id, 'asignar'); } catch (e) { fail(e); } } }, t('assign_btn')),
+    fillFilters(); drawList();
+    return panel(t('assign'), [h('div', { class: 'cols' }, field(t('assign_mode'), modeSel), field(t('cs_assign'), consSel), field(t('win_from'), winFrom), field(t('win_to'), winTo), field(t('pace_title'), paceSel), field(t('pace_cap'), capIn), teamByField, teamField, field(t('subject'), sjSel), gSel.f, sSel.f, hSel.f, field(t('search'), search)),
+      h('div', { class: 'row' }, h('button', { onclick: () => { visible().forEach((u) => picked.add(u.id)); drawList(); } }, t('select_all')), h('button', { onclick: () => { picked.clear(); drawList(); } }, '✕'), cnt), preview, h('div', null, list),
+      h('p', { class: 'row' }, h('button', { class: 'pri', onclick: async () => { try {
+        if (mode === 'team' && teamBy === 'sub' && !sj) return toast(t('team_need_subj'));
+        const r = await api('POST', '/api/patients/' + id + '/assign', { mode, team_by: teamBy, subject: sj, team_name: teamName.value, consigna_id: consSel.value || null, opens: winFrom.value, closes: winTo.value, pace: paceSel.value, max_day: capIn.value || null, user_ids: [...picked] });
+        toast(t('assigned') + ': ' + r.created + (r.skipped ? ' · ' + r.skipped + ' ' + t('skipped') : '')); viewPatient(id, 'asignar'); } catch (e) { fail(e); } } }, t('assign_btn')),
         h('button', { onclick: async () => { try { const r = await api('POST', '/api/sync'); toast(t('synced') + ': ' + r.students); viewPatient(id, 'asignar'); } catch (e) { fail(e); } } }, t('sync')))]);
   }
   function activityPanel(id, act) {
