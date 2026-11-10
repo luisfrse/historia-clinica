@@ -247,3 +247,9 @@ svg.bc .net { font-weight: 700; } svg.bc .net.neg { fill: #a12; }
 .stu-tools { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); }
 .spgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px 16px; margin-bottom: 10px; }
 .spcell { display: flex; align-items: center; justify-content: space-between; gap: 8px; } .spcell span { min-width: 0; overflow-wrap: anywhere; }
+
+/* Alumnado: sin selección ni copia/pega (ver nocopy.js) */
+html.nocopy body,html.nocopy body *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+html.nocopy input,html.nocopy textarea,html.nocopy [contenteditable="true"]{-webkit-user-select:text;user-select:text}
+html.nocopy img{-webkit-user-drag:none;user-drag:none}
+@media print{html.nocopy body{display:none!important}}

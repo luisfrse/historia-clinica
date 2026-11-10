@@ -439,7 +439,7 @@
     } catch (e) { fail(e); if (e.status === 404) location.hash = '#/'; }
   }
   async function boot() {
-    try { ME = await api('GET', '/api/me'); LANG = ME.lang || LANG; document.documentElement.lang = LANG; route(); } catch (_) { renderLogin(); }
+    try { ME = await api('GET', '/api/me'); LANG = ME.lang || LANG; document.documentElement.lang = LANG; document.documentElement.classList.toggle('nocopy', !ME.staff); route(); } catch (_) { document.documentElement.classList.remove('nocopy'); renderLogin(); }
   }
   document.querySelector('.skip').addEventListener('click', (e) => { e.preventDefault(); main.focus(); });
   window.addEventListener('hashchange', route);
