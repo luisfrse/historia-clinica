@@ -369,7 +369,7 @@
   /* ---------- profesorado: notas y rúbrica ---------- */
   async function viewGrades() {
     const [{ grades, rubric, campus }] = await Promise.all([api('GET', '/api/grades')]);
-    const rows = rubric.map((c) => ({ es: c.es, ca: c.ca, w: c.w })), box = h('div');
+    const rows = rubric.map((c) => ({ id: c.id, es: c.es, ca: c.ca, w: c.w })), box = h('div');
     const drawR = () => { clear(box); rows.forEach((r, i) => add(box, h('div', { class: 'row rub' }, h('input', { type: 'text', value: r.es, placeholder: t('gr_crit_es'), 'aria-label': t('gr_crit_es'), oninput: (e) => { r.es = e.target.value; } }), h('input', { type: 'text', value: r.ca, placeholder: t('gr_crit_ca'), 'aria-label': t('gr_crit_ca'), oninput: (e) => { r.ca = e.target.value; } }), h('input', { type: 'number', min: 1, max: 10, value: r.w, 'aria-label': t('gr_w'), oninput: (e) => { r.w = e.target.value; } }), h('button', { class: 'sm danger', onclick: () => { rows.splice(i, 1); drawR(); } }, '✕')))); };
     drawR();
     const gradeRow = (g) => h('tr', null, h('td', null, g.name, h('div', { class: 'sub' }, g.email)), h('td', null, g.code + ' ' + g.patient), h('td', null, g.chart), h('td', { class: 'r' }, h('b', null, g.total == null ? '—' : g.total)), h('td', null, h('span', { class: 'chip ' + (g.published ? 'grn' : 'gry') }, g.published ? t('yes') : t('no'))), h('td', null, h('button', { class: 'sm', onclick: () => { location.hash = '#/chart/' + g.chart_id + '/eval'; } }, t('gr_open'))));

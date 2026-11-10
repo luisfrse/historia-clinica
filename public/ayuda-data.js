@@ -36,8 +36,9 @@ window.HC_HELP = {
           ['lead', 'Arriba de la historia está la <b>consigna</b>: lo que tienes que hacer, la fecha de entrega (si la hay) y una lista de tareas.'],
           ['img', 's-historia', 0.95],
           ['leg', [
-            ['✓', 'Las tareas con <b>✓</b> se marcan solas cuando haces el registro que piden (por ejemplo, dos tomas de constantes). No hay que avisar a nadie.'],
+            ['✓', 'Las tareas con <b>○</b> se comprueban solas: pasan a <b>✓</b> cuando haces el registro que piden (por ejemplo, dos tomas de constantes). No hay que avisar a nadie.'],
             ['✓', 'Las tareas con <b>•</b> («libres») no se comprueban solas: las valorará tu profesor.'],
+            ['✓', 'Debajo de la lista tienes una <b>leyenda</b> con los tres símbolos.'],
             ['✓', 'Si una tarea lleva una etiqueta <b>Día 2</b>, hay que hacerla ese día; la del día en que estás aparece resaltada.'],
             ['✓', 'Puedes plegar la consigna con la flecha para ganar espacio.'],
           ]],
@@ -161,6 +162,7 @@ window.HC_HELP = {
           ['img', 't-consignas', 0.95],
           ['leg', [
             ['✓', 'Cada consigna tiene <b>título, enunciado</b>, fecha de entrega opcional y <b>tareas</b>.'],
+            ['✓', '<b>Leyenda de las tareas</b> (al pie de la lista): <b>○</b> se marca sola al registrarlo en la historia (con «×2» = registros necesarios), <b>•</b> libre, sin comprobación automática; en la vista del alumno, <b>✓</b> es hecha.'],
             ['✓', 'Cada tarea es de un <b>tipo</b> (nota, constantes, balance, cuidado, medicación, escala, valoración, plan, informe) con un mínimo de registros, y <b>se marca sola</b> cuando el alumno los hace. El tipo «libre» no se comprueba. Cada tarea puede llevar un <b>día</b> (1, 2…): entonces solo cuentan los registros hechos ese día.'],
             ['✓', 'Al pie de cada consigna tienes un <b>enlace para el Campus</b> que lleva al alumno directamente a su historia de esa actividad: pégalo como material o en el enunciado de una tarea o cuestionario.'],
           ]],
@@ -168,7 +170,9 @@ window.HC_HELP = {
         ['7 · Asignar a alumnos o equipos', [
           ['img', 't-asignar', 0.95],
           ['leg', [
-            ['✓', 'Pestaña <b>Asignación</b>: elige el modo (<b>individual</b>, una historia por alumno, o <b>equipo</b>), la <b>consigna</b>, y marca al alumnado (filtra por asignatura o busca).'],
+            ['✓', 'Pestaña <b>Asignación</b>: elige el modo (<b>individual</b>, una historia por alumno, o <b>equipo</b>), la <b>consigna</b>, y marca al alumnado (filtra por asignatura, grupo, subgrupo y desdoblamiento, o busca).'],
+            ['✓', '<b>Grupos del Campus:</b> junto a cada alumno ves su grupo, subgrupo y desdoblamiento (por ejemplo «A2 · desd. B»). Filtra por <b>Grupo, Subgrupo o Desdoblamiento</b> y pulsa «Seleccionar todos los visibles» para asignar de golpe, por ejemplo, al subgrupo A de Proyecto. Los datos vienen del Campus: si no aparecen, pulsa <b>Sincronizar alumnado del Campus</b>.'],
+            ['✓', '<b>Un equipo por subgrupo:</b> en modo «Equipo», con una asignatura elegida, escoge «Un equipo por subgrupo (1, 2, 3…)». El mismo caso se asigna a un equipo por cada subgrupo del Campus (se muestra antes cuántos equipos saldrán y de cuántas personas). El alumnado sin subgrupo se omite y se avisa.'],
             ['✓', '<b>Disponible desde / Hasta:</b> programa el acceso (vacío = sin límite). Antes de la fecha el alumno ve la historia bloqueada; después del fin puede consultarla pero no registrar. Se puede cambiar luego en la propia historia.'],
             ['✓', '<b>Ritmo:</b> «Lo marca el profesor» (tú mueves el día del caso; ideal en clase) o «Por días: lo marca el alumno» (cada alumno o equipo pulsa «Terminar el día N» y pasa al siguiente). Puedes fijar el <b>último día</b>; si no, es el de la última prueba o prescripción. Lo cambias después en el desplegable «Ritmo» de la historia.'],
             ['✓', '<b>Días cerrados:</b> en el modo por días, los días terminados quedan cerrados para el alumno (ni añadir ni corregir). Para <b>reabrir un día</b>, retrocede el «Día del caso» con − en su historia: el alumno vuelve a ese día. En Seguimiento ves en qué día va cada uno.'],
@@ -278,8 +282,9 @@ window.HC_HELP = {
           ['lead', "A dalt de la història hi ha la <b>consigna</b>: el que has de fer, la data de lliurament (si n'hi ha) i una llista de tasques."],
           ['img', 's-historia', 0.95],
           ['leg', [
-            ['✓', "Les tasques amb <b>✓</b> es marquen soles quan fas el registre que demanen (per exemple, dues preses de constants). No cal avisar ningú."],
+            ['✓', "Les tasques amb <b>○</b> es comproven soles: passen a <b>✓</b> quan fas el registre que demanen (per exemple, dues preses de constants). No cal avisar ningú."],
             ['✓', "Les tasques amb <b>•</b> («lliures») no es comproven soles: les valorarà el teu professor."],
+            ['✓', "A sota de la llista tens una <b>llegenda</b> amb els tres símbols."],
             ['✓', "Si una tasca porta una etiqueta <b>Dia 2</b>, s'ha de fer aquell dia; la del dia en què ets apareix ressaltada."],
             ['✓', "Pots plegar la consigna amb la fletxa per guanyar espai."],
           ]],
@@ -403,6 +408,7 @@ window.HC_HELP = {
           ['img', 't-consignas', 0.95],
           ['leg', [
             ['✓', "Cada consigna té <b>títol, enunciat</b>, data de lliurament opcional i <b>tasques</b>."],
+            ['✓', "<b>Llegenda de les tasques</b> (al peu de la llista): <b>○</b> es marca sola en registrar-ho a la història (amb «×2» = registres necessaris), <b>•</b> lliure, sense comprovació automàtica; a la vista de l'alumne, <b>✓</b> és feta."],
             ['✓', "Cada tasca és d'un <b>tipus</b> (nota, constants, balanç, cura, medicació, escala, valoració, pla, informe) amb un mínim de registres, i <b>es marca sola</b> quan l'alumne els fa. El tipus «lliure» no es comprova. Cada tasca pot portar un <b>dia</b> (1, 2…): llavors només compten els registres fets aquell dia."],
             ['✓', "Al peu de cada consigna tens un <b>enllaç per al Campus</b> que porta l'alumne directament a la seva història d'aquesta activitat: enganxa'l com a material o a l'enunciat d'una tasca o qüestionari."],
           ]],
@@ -410,7 +416,9 @@ window.HC_HELP = {
         ['7 · Assignar a alumnes o equips', [
           ['img', 't-asignar', 0.95],
           ['leg', [
-            ['✓', "Pestanya <b>Assignació</b>: tria el mode (<b>individual</b>, una història per alumne, o <b>equip</b>), la <b>consigna</b>, i marca l'alumnat (filtra per assignatura o cerca)."],
+            ['✓', "Pestanya <b>Assignació</b>: tria el mode (<b>individual</b>, una història per alumne, o <b>equip</b>), la <b>consigna</b>, i marca l'alumnat (filtra per assignatura, grup, subgrup i desdoblament, o cerca)."],
+            ['✓', "<b>Grups del Campus:</b> al costat de cada alumne veus el seu grup, subgrup i desdoblament (per exemple «A2 · desd. B»). Filtra per <b>Grup, Subgrup o Desdoblament</b> i prem «Seleccionar tots els visibles» per assignar d'un cop, per exemple, al subgrup A de Projecte. Les dades venen del Campus: si no apareixen, prem <b>Sincronitzar alumnat del Campus</b>."],
+            ['✓', "<b>Un equip per subgrup:</b> en mode «Equip», amb una assignatura triada, escull «Un equip per subgrup (1, 2, 3…)». El mateix cas s'assigna a un equip per cada subgrup del Campus (es mostra abans quants equips sortiran i de quantes persones). L'alumnat sense subgrup s'omet i s'avisa."],
             ['✓', "<b>Disponible des de / Fins a:</b> programa l'accés (buit = sense límit). Abans de la data l'alumne veu la història bloquejada; després del final la pot consultar però no registrar. Es pot canviar després a la mateixa història."],
             ['✓', "<b>Ritme:</b> «El marca el professor» (tu mous el dia del cas; ideal a classe) o «Per dies: el marca l'alumne» (cada alumne o equip prem «Acabar el dia N» i passa al següent). Pots fixar el <b>darrer dia</b>; si no, és el de la darrera prova o prescripció. El canvies després al desplegable «Ritme» de la història."],
             ['✓', "<b>Dies tancats:</b> en el mode per dies, els dies acabats queden tancats per a l'alumne (ni afegir ni corregir). Per <b>reobrir un dia</b>, retrocedeix el «Dia del cas» amb − a la seva història: l'alumne torna a aquell dia. A Seguiment veus en quin dia va cadascú."],

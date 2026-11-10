@@ -43,18 +43,18 @@
   async function api(method, url, body) {
     const r = await fetch(url, { method, credentials: 'same-origin', headers: { 'X-Requested-With': 'historia', 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
     let j = null; try { j = await r.json(); } catch (_) {}
-    if (r.status === 401 && !url.startsWith('/api/admin/login')) { ME = null; renderLogin(); throw new Error('auth'); }
+    if (r.status === 401 && !url.startsWith('/api/admin/login') && !url.startsWith('/api/teacher/login')) { ME = null; renderLogin(); throw new Error('auth'); }
     if (!r.ok) { const e = new Error((j && j.error) || 'error'); e.status = r.status; throw e; }
     return j;
   }
-  const fail = (e) => { if (e.message === 'preview') return toast(t('prev_ro'), true); if (e.message === 'day-closed') return toast(t('dy_closed'), true); if (e.message === 'last-day') return toast(t('dy_last'), true); if (e.message !== 'auth') toast(t('err') + (e.message && e.message !== 'error' ? ' (' + e.message + ')' : ''), true); };
+  const fail = (e) => { if (e.message === 'preview') return toast(t('prev_ro'), true); if (e.message === 'day-closed') return toast(t('dy_closed'), true); if (e.message === 'last-day') return toast(t('dy_last'), true); if (e.message !== 'auth') { const k = 'e_' + String(e.message).replace(/-/g, '_'), tx = e.message ? t(k) : ''; toast(tx && tx !== k ? tx : t('err') + (e.message && e.message !== 'error' ? ' (' + e.message + ')' : ''), true); } };
   const pad = (n) => String(n).padStart(2, '0');
   const fmtD = (s) => (s && /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4) : '');
   const fmtDT = (s) => (s ? s.slice(8, 10) + '/' + s.slice(5, 7) + ' ' + s.slice(11, 16) : '');
   const fmtISO = (s) => { try { return new Date(s).toLocaleString(LANG === 'ca' ? 'ca-ES' : 'es-ES', { dateStyle: 'short', timeStyle: 'short' }); } catch (_) { return s; } };
   const nowInput = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
   const ageOf = (iso) => { if (!iso) return ''; const b = new Date(iso), n = new Date(); let a = n.getFullYear() - b.getFullYear(); if (n < new Date(n.getFullYear(), b.getMonth(), b.getDate())) a--; return a >= 0 ? a : ''; };
-  const field = (label, input) => h('div', null, h('label', null, label), input);
+  let fid = 0; const field = (label, input) => { const c = input && (input.matches && input.matches('input,select,textarea') ? input : input.querySelector && input.querySelector('input,select,textarea')); if (c && !c.id) c.id = 'hf' + (++fid); return h('div', null, h('label', c ? { for: c.id } : null, label), input); };
   const name = (d) => (d.apellidos || '') + ', ' + (d.nombre || '');
   const stateChip = (open) => h('span', { class: 'chip ' + (open ? 'grn' : 'amb') }, open ? t('status_open') : t('status_closed'));
   const panel = (title, body, opts) => h('div', { class: 'panel' + (opts && opts.cls ? ' ' + opts.cls : '') }, title ? h('div', { class: 'ph' }, title, opts && opts.right) : null, h('div', { class: 'pb' + (opts && opts.flush ? ' flush' : '') }, body));
@@ -93,7 +93,7 @@
   function renderLogin() {
     renderTop();
     const pw = h('input', { type: 'password', autocomplete: 'current-password' }), em = h('input', { type: 'email', autocomplete: 'username', placeholder: t('login_email_ph') });
-    const f = h('form', { onsubmit: async (e) => { e.preventDefault(); try { if (em.value.trim()) await api('POST', '/api/teacher/login', { email: em.value, password: pw.value }); else await api('POST', '/api/admin/login', { password: pw.value }); await boot(); } catch (er) { toast(er.status === 429 ? 'Demasiados intentos' : 'Contraseña incorrecta', true); } } },
+    const f = h('form', { onsubmit: async (e) => { e.preventDefault(); try { if (em.value.trim()) await api('POST', '/api/teacher/login', { email: em.value, password: pw.value }); else await api('POST', '/api/admin/login', { password: pw.value }); await boot(); } catch (er) { toast(er.status === 429 ? t('too_many') : t('bad_pw'), true); } } },
       field(t('login_email'), em), field(t('admin_pw'), pw), h('p', null, h('button', { class: 'pri', type: 'submit' }, t('enter'))));
     show(h('div', { class: 'login' }, panel(t('login_title'), [h('p', null, t('login_campus')), h('p', null, h('a', { class: 'btn pri', href: 'https://campus.luisfs.com' }, t('login_btn')))]),
       h('details', { class: 'panel' }, h('summary', null, t('admin_pw')), h('div', { class: 'pb' }, f))));
@@ -208,7 +208,7 @@
   }
 
   function assignPanel(id, charts, uj, cons) {
-    const users = uj.users.filter((u) => u.active), picked = new Set(); let mode = 'individual', q = '', sj = '', fg = '', fs = '', fh = '', teamBy = 'one';
+    const users = uj.users.filter((u) => u.active && u.role === 'student'), picked = new Set(); let mode = 'individual', q = '', sj = '', fg = '', fs = '', fh = '', teamBy = 'one';
     const list = h('div', { class: 'pick' }), cnt = h('span', { class: 'mut' }), preview = h('p', { class: 'mut', hidden: true });
     const assignedIds = new Set(charts.flatMap((c) => c.members.map((m) => m.id)));
     const subjTitle = (slug) => (uj.subjects.find((x) => x.slug === slug) || {}).title || slug;
@@ -219,14 +219,15 @@
     const tagsOf = (u) => enrs(u).filter((e) => e.grp || e.sub || e.half).map((e) => (sj ? '' : subjTitle(e.slug) + ': ') + code(e));
     const teamsOf = (us) => { const m = new Map(); for (const u of us) { const e = enrs(u).find((x) => x.sub); const k = e ? (e.grp || '') + e.sub : ''; if (!m.has(k)) m.set(k, []); m.get(k).push(u); } return m; };
     const refreshInfo = () => {
-      cnt.textContent = picked.size + ' ' + t('selected');
+      const shown = new Set(visible().map((u) => u.id)), hid = [...picked].filter((x) => !shown.has(x)).length;
+      cnt.textContent = picked.size + ' ' + t('selected') + (hid ? ' · ' + hid + ' ' + t('hidden_sel') : '');
       const byTeam = mode === 'team' && teamBy === 'sub'; preview.hidden = !byTeam; if (!byTeam) return;
       const m = teamsOf(users.filter((u) => picked.has(u.id))), nos = m.get('') ? m.get('').length : 0;
-      preview.textContent = !sj ? t('team_need_subj') : (m.size - (nos ? 1 : 0)) + ' ' + t('teams_n') + ': ' + [...m.entries()].filter(([k]) => k).sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true })).map(([k, v]) => k + ' (' + v.length + ')').join(', ') + (nos ? ' · ' + nos + ' ' + t('no_sub') : '');
+      preview.textContent = !sj ? t('team_need_subj') : !picked.size ? t('team_pick_hint') : (m.size - (nos ? 1 : 0)) + ' ' + t('teams_n') + ': ' + [...m.entries()].filter(([k]) => k).sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true })).map(([k, v]) => k + ' (' + v.length + ')').join(', ') + (nos ? ' · ' + nos + ' ' + t('no_sub') : '');
     };
     const drawList = () => {
       clear(list); const v = visible();
-      v.forEach((u) => list.appendChild(h('label', null, h('input', { type: 'checkbox', checked: picked.has(u.id), onchange: (e) => { e.target.checked ? picked.add(u.id) : picked.delete(u.id); refreshInfo(); } }), u.name, h('span', { class: 'chip' }, t('p_' + u.profile)), tagsOf(u).map((x) => h('span', { class: 'chip' }, x)), assignedIds.has(u.id) ? h('span', { class: 'chip grn' }, '✓') : null)));
+      v.forEach((u) => list.appendChild(h('label', null, h('input', { type: 'checkbox', checked: picked.has(u.id), onchange: (e) => { e.target.checked ? picked.add(u.id) : picked.delete(u.id); refreshInfo(); } }), u.name, h('span', { class: 'chip' }, t('p_' + u.profile)), tagsOf(u).map((x) => h('span', { class: 'chip' }, x)), assignedIds.has(u.id) ? h('span', { class: 'chip grn', title: t('already_has'), 'aria-label': t('already_has') }, '✓') : null)));
       if (!v.length) list.appendChild(h('div', { class: 'empty' }, t('no_students')));
       refreshInfo();
     };
@@ -251,10 +252,12 @@
     fillFilters(); drawList();
     return panel(t('assign'), [h('div', { class: 'cols' }, field(t('assign_mode'), modeSel), field(t('cs_assign'), consSel), field(t('win_from'), winFrom), field(t('win_to'), winTo), field(t('pace_title'), paceSel), field(t('pace_cap'), capIn), teamByField, teamField, field(t('subject'), sjSel), gSel.f, sSel.f, hSel.f, field(t('search'), search)),
       h('div', { class: 'row' }, h('button', { onclick: () => { visible().forEach((u) => picked.add(u.id)); drawList(); } }, t('select_all')), h('button', { onclick: () => { picked.clear(); drawList(); } }, '✕'), cnt), preview, h('div', null, list),
-      h('p', { class: 'row' }, h('button', { class: 'pri', onclick: async () => { try {
-        if (mode === 'team' && teamBy === 'sub' && !sj) return toast(t('team_need_subj'));
+      h('p', { class: 'row' }, h('button', { class: 'pri', onclick: async (ev) => { const btn = ev.currentTarget; if (btn.disabled) return; try {
+        if (!picked.size) return toast(t('pick_some'), true);
+        if (mode === 'team' && teamBy === 'sub' && !sj) return toast(t('team_need_subj'), true);
+        btn.disabled = true;
         const r = await api('POST', '/api/patients/' + id + '/assign', { mode, team_by: teamBy, subject: sj, team_name: teamName.value, consigna_id: consSel.value || null, opens: winFrom.value, closes: winTo.value, pace: paceSel.value, max_day: capIn.value || null, user_ids: [...picked] });
-        toast(t('assigned') + ': ' + r.created + (r.skipped ? ' · ' + r.skipped + ' ' + t('skipped') : '')); viewPatient(id, 'asignar'); } catch (e) { fail(e); } } }, t('assign_btn')),
+        toast(t('assigned') + ': ' + r.created + (r.skipped ? ' · ' + r.skipped + ' ' + t('skipped') : '') + (r.no_sub ? ' · ' + r.no_sub + ' ' + t('no_sub_done') : '')); viewPatient(id, 'asignar'); } catch (e) { btn.disabled = false; fail(e); } } }, t('assign_btn')),
         h('button', { onclick: async () => { try { const r = await api('POST', '/api/sync'); toast(t('synced') + ': ' + r.students); viewPatient(id, 'asignar'); } catch (e) { fail(e); } } }, t('sync')))]);
   }
   function activityPanel(id, act) {
@@ -428,7 +431,7 @@
   async function viewMine() {
     const { charts } = await api('GET', '/api/my/charts');
     const rows = charts.map((c) => { const age = ageOf(c.nacimiento); return h('tr', { class: c.window === 'scheduled' ? 'locked' : 'clk', onclick: () => { if (c.window !== 'scheduled') location.hash = '#/chart/' + c.id; } },
-      h('td', null, c.window === 'scheduled' ? c.patient.trim() : h('a', { href: '#/chart/' + c.id, onclick: (e) => e.stopPropagation() }, c.patient.trim()), c.alergias.length ? h('div', null, h('span', { class: 'al' }, '⚠ ' + c.alergias.join(', '))) : null, c.consigna ? h('div', { class: 'sub' }, t('cs_title') + ': ' + c.consigna.title + (c.consigna.total ? ' · ' + c.consigna.done + '/' + c.consigna.total : '')) : null),
+      h('td', null, c.window === 'scheduled' ? (c.patient.trim() || t('sched_name')) : h('a', { href: '#/chart/' + c.id, onclick: (e) => e.stopPropagation() }, c.patient.trim()), c.alergias.length ? h('div', null, h('span', { class: 'al' }, '⚠ ' + c.alergias.join(', '))) : null, c.consigna ? h('div', { class: 'sub' }, t('cs_title') + ': ' + c.consigna.title + (c.consigna.total ? ' · ' + c.consigna.done + '/' + c.consigna.total : '')) : null),
       h('td', null, (age !== '' ? age + ' ' + t('age_years') : '') + (c.sexo ? ' / ' + t('sex_' + c.sexo) : '')), h('td', null, [c.unidad, c.habitacion && 'H ' + c.habitacion, c.cama && 'C ' + c.cama].filter(Boolean).join(' / ')), h('td', null, c.diagnostico),
       h('td', null, h('span', { class: 'chip' }, c.kind === 'team' ? t('team') + ': ' + c.name : t('individual'))), h('td', { class: 'r' }, c.mine), h('td', null, c.window === 'scheduled' ? h('span', { class: 'chip' }, t('win_from_on').replace('{d}', fmtD(c.opens))) : c.window === 'ended' ? h('span', { class: 'chip amb' }, t('win_ended_on').replace('{d}', fmtD(c.closes))) : stateChip(c.status === 'open'), c.closes && !c.window ? h('div', { class: 'sub' }, t('win_until').replace('{d}', fmtD(c.closes))) : null, c.pace === 'student' ? h('div', { class: 'sub' }, t('dy_title').replace('{n}', c.day).replace('{m}', c.cap)) : null)); });
     show(h('div', { class: 'pg-title' }, h('h1', null, t('nav_mine'))), h('p', { class: 'mut' }, t('mine_intro')),

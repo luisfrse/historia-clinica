@@ -90,7 +90,7 @@ function upsertUser(email, name, lang, subjects, role, enr) {
   const prof = !u.profile_manual && role === 'student' ? (profileFromSubjects(subjects) || u.profile) : u.profile;
   db.run('UPDATE users SET name = ?, subjects = ?, profile = ?, role = CASE WHEN role IN (\'teacher\', \'admin\') AND ? = \'student\' THEN role ELSE ? END WHERE id = ?', U.clip(name, 120) || u.name, subs, prof, role, role, u.id);
   }
-  if (Array.isArray(enr)) db.run('UPDATE users SET enr = ? WHERE id = ?', JSON.stringify(enr.slice(0, 60).map((e) => ({ slug: U.clip(e.slug, 80), grp: U.clip(e.grp, 4), sub: U.clip(String(e.sub || ''), 4), half: U.clip(e.half, 2) }))), u.id);
+  if (Array.isArray(enr)) db.run('UPDATE users SET enr = ? WHERE id = ?', JSON.stringify(enr.filter((e) => e && typeof e === 'object').slice(0, 60).map((e) => ({ slug: U.clip(e.slug, 80), grp: U.clip(e.grp, 4), sub: U.clip(String(e.sub || ''), 4), half: U.clip(e.half, 2) }))), u.id);
   return db.get('SELECT * FROM users WHERE id = ?', u.id);
 }
 
@@ -286,17 +286,17 @@ R('POST', '/api/patients/:id/assign', async (req, res, ctx) => {
   if (!users.length) return bad(res, 'users');
   const out = { created: 0, skipped: 0 };
   const win = windowFields(b); if (win.error) return bad(res, win.error);
-  const pace = b.pace === 'student' ? 'student' : 'teacher', maxDay = b.max_day ? Math.min(60, intId(b.max_day)) || null : null, startD = todayLocal();
+  const pace = b.pace === 'student' ? 'student' : 'teacher', maxDay = b.max_day ? Math.min(60, intId(b.max_day)) || null : null, startD = win.opens && win.opens > todayLocal() ? win.opens : todayLocal();
   const cons = b.consigna_id ? db.get('SELECT id FROM consignas WHERE id = ? AND patient_id = ?', intId(b.consigna_id), p.id) : null, cid = cons ? cons.id : null;
   db.tx(() => {
     if (b.mode === 'team') {
       const name = U.clip(b.team_name, 80) || 'Equipo';
       const mkTeam = (nm, us) => { const r = db.run("INSERT INTO charts (patient_id, kind, name, consigna_id, opens, closes, pace, max_day, start_date, created) VALUES (?,'team',?,?,?,?,?,?,?,?)", p.id, nm, cid, win.opens, win.closes, pace, maxDay, startD, new Date().toISOString());
         us.forEach((u) => db.run('INSERT INTO chart_members (chart_id, user_id, role) VALUES (?,?,?)', Number(r.lastInsertRowid), u.id, u.profile)); out.created++; };
-      if (b.team_by === 'sub') { /* el mismo caso, un equipo por subgrupo del Campus (p. ej. grupo A → subgrupos 1–4) */
+      if (b.team_by === 'sub') { out.no_sub = 0; /* el mismo caso, un equipo por subgrupo del Campus (p. ej. grupo A → subgrupos 1–4) */
         const slug = U.clip(b.subject, 80); const teams = new Map();
-        for (const u of users) { let e = []; try { e = JSON.parse(u.enr || '[]'); } catch (_) { /* sin datos */ } const m = e.find((x) => x.slug === slug && x.sub); if (!m) { out.skipped++; continue; } const k = (m.grp || '') + m.sub; if (!teams.has(k)) teams.set(k, []); teams.get(k).push(u); }
-        [...teams.entries()].sort((a, c) => a[0].localeCompare(c[0], undefined, { numeric: true })).forEach(([k, us]) => mkTeam(name + ' ' + k, us));
+        for (const u of users) { let e = []; try { e = JSON.parse(u.enr || '[]'); } catch (_) { /* sin datos */ } const m = e.find((x) => x.slug === slug && x.sub); if (!m) { out.no_sub++; continue; } const k = (m.grp || '') + m.sub; if (!teams.has(k)) teams.set(k, []); teams.get(k).push(u); }
+        [...teams.entries()].sort((a, c) => a[0].localeCompare(c[0], undefined, { numeric: true })).forEach(([k, us]) => { if (db.get("SELECT 1 x FROM charts WHERE patient_id = ? AND kind = 'team' AND name = ? AND consigna_id IS ?", p.id, name + ' ' + k, cid)) { out.skipped++; return; } mkTeam(name + ' ' + k, us); });
       } else mkTeam(name, users);
     } else {
       for (const u of users) {
@@ -353,6 +353,7 @@ R('GET', '/api/users', async (req, res, ctx) => {
 }, { staff: true });
 R('PUT', '/api/users/:id', async (req, res, ctx) => {
   const u = db.get("SELECT * FROM users WHERE id = ? AND role != 'admin'", intId(ctx.params.id)); if (!u) return bad(res, 'notfound', 404);
+  if (u.role !== 'student' && ctx.user.role !== 'admin') return bad(res, 'forbidden', 403); /* las cuentas de profesorado solo las toca la administración */
   const b = await readJson(req, 2e3);
   if (CAT.PROFILES.includes(b.profile)) db.run('UPDATE users SET profile = ?, profile_manual = 1 WHERE id = ?', b.profile, u.id);
   if (b.profile === 'auto') db.run('UPDATE users SET profile_manual = 0 WHERE id = ?', u.id);
@@ -401,8 +402,8 @@ R('GET', '/api/audit', async (req, res) => json(res, 200, { rows: db.all('SELECT
 
 /* --- historias de trabajo (alumnado y profesorado) --- */
 R('GET', '/api/my/charts', async (req, res, ctx) => {
-  const rows = db.all('SELECT c.id, c.kind, c.name, c.status, p.id pid, p.code, p.data, (SELECT COUNT(*) FROM records r WHERE r.chart_id = c.id AND r.user_id = ? AND r.void_at IS NULL) mine, (SELECT COUNT(*) FROM records r WHERE r.chart_id = c.id AND r.void_at IS NULL) total FROM chart_members m JOIN charts c ON c.id = m.chart_id JOIN patients p ON p.id = c.patient_id WHERE m.user_id = ? AND p.archived = 0 ORDER BY c.id DESC', ctx.user.id, ctx.user.id);
-  json(res, 200, { charts: rows.map((r) => { const d = PAT.forStudent(JSON.parse(r.data)); return { consigna: consignaBrief(r.id), consigna_id: chartMeta(r.id).consigna_id, id: r.id, kind: r.kind, name: r.name, status: r.status, ...chartMeta(r.id), code: r.code, patient: (d.nombre || '') + ' ' + (d.apellidos || ''), unidad: d.unidad || '', habitacion: d.habitacion || '', cama: d.cama || '', sexo: d.sexo || '', nacimiento: d.fecha_nacimiento || '', alergias: (d.alergias || []).map((x) => x.agente), sin_alergias: !!d.sin_alergias, diagnostico: d.diagnostico_medico || '', mine: r.mine, total: r.total }; }) });
+  const rows = db.all('SELECT c.id, c.kind, c.name, c.status, c.opens, c.closes, p.id pid, p.code, p.data, (SELECT COUNT(*) FROM records r WHERE r.chart_id = c.id AND r.user_id = ? AND r.void_at IS NULL) mine, (SELECT COUNT(*) FROM records r WHERE r.chart_id = c.id AND r.void_at IS NULL) total FROM chart_members m JOIN charts c ON c.id = m.chart_id JOIN patients p ON p.id = c.patient_id WHERE m.user_id = ? AND p.archived = 0 ORDER BY c.id DESC', ctx.user.id, ctx.user.id);
+  json(res, 200, { charts: rows.map((r) => { const d = chartWindow(r) === 'scheduled' ? {} : PAT.forStudent(JSON.parse(r.data)); return { consigna: consignaBrief(r.id), consigna_id: chartMeta(r.id).consigna_id, id: r.id, kind: r.kind, name: r.name, status: r.status, ...chartMeta(r.id), code: r.code, patient: (d.nombre || '') + ' ' + (d.apellidos || ''), unidad: d.unidad || '', habitacion: d.habitacion || '', cama: d.cama || '', sexo: d.sexo || '', nacimiento: d.fecha_nacimiento || '', alergias: (d.alergias || []).map((x) => x.agente), sin_alergias: !!d.sin_alergias, diagnostico: d.diagnostico_medico || '', mine: r.mine, total: r.total }; }) });
 });
 R('GET', '/api/charts/:id', async (req, res, ctx) => {
   const a = chartFor(ctx.user, intId(ctx.params.id));
@@ -414,7 +415,7 @@ R('GET', '/api/charts/:id', async (req, res, ctx) => {
     orders: (a.staff ? db.all('SELECT * FROM orders WHERE patient_id = ? ORDER BY start_day, id', p.id) : visibleOrders(a.chart)).map(orderOut),
     events: (a.staff ? db.all('SELECT * FROM events WHERE patient_id = ? ORDER BY day, id', p.id) : visibleEvents(a.chart)).map(evOut),
     grades: gradesFor(a, ctx.user),
-    members: membersOf(a.chart.id), records: recordsOf(a.chart.id, a.staff ? ctx.url.searchParams.get('user') : null), comments: chartComments(a.chart.id),
+    members: membersOf(a.chart.id).map((m) => (a.staff ? m : { id: m.id, name: m.name, role: m.role })), records: recordsOf(a.chart.id, a.staff ? ctx.url.searchParams.get('user') : null), comments: chartComments(a.chart.id),
   });
 });
 R('POST', '/api/charts/:id/records', async (req, res, ctx) => {
@@ -431,9 +432,14 @@ R('POST', '/api/charts/:id/records', async (req, res, ctx) => {
   if (byDays) occurred = caseDate(a.chart) + occurred.slice(10); /* manda la fecha del caso; el alumno solo elige la hora */
   else if (occurred > U.nowLocal().slice(0, 11) + '23:59') return bad(res, 'futuro');
   let rep = null;
-  if (b.replaces_id) { rep = db.get('SELECT * FROM records WHERE id = ? AND chart_id = ? AND user_id = ?', intId(b.replaces_id), a.chart.id, ctx.user.id); if (!rep) return bad(res, 'replaces'); if (byDays && rep.day != null && rep.day < a.chart.day) return bad(res, 'day-closed', 409); }
-  const r = db.run('INSERT INTO records (chart_id, user_id, author_role, type, data, occurred, day, created, replaces_id) VALUES (?,?,?,?,?,?,?,?,?)', a.chart.id, ctx.user.id, a.role, b.type, JSON.stringify(data), occurred, a.chart.day || 1, new Date().toISOString(), rep ? rep.id : null);
-  json(res, 200, { id: Number(r.lastInsertRowid) });
+  if (b.replaces_id) { rep = db.get('SELECT * FROM records WHERE id = ? AND chart_id = ? AND user_id = ?', intId(b.replaces_id), a.chart.id, ctx.user.id); if (!rep || rep.type !== b.type) return bad(res, 'replaces'); if (rep.void_at) return bad(res, 'already', 409); if (byDays && rep.day != null && rep.day < a.chart.day) return bad(res, 'day-closed', 409); }
+  const nowIso = new Date().toISOString(); let newId = null;
+  db.tx(() => {
+    const r = db.run('INSERT INTO records (chart_id, user_id, author_role, type, data, occurred, day, created, replaces_id) VALUES (?,?,?,?,?,?,?,?,?)', a.chart.id, ctx.user.id, a.role, b.type, JSON.stringify(data), occurred, a.chart.day || 1, nowIso, rep ? rep.id : null);
+    newId = Number(r.lastInsertRowid);
+    if (rep) db.run('UPDATE records SET void_at = ?, void_by = ?, void_reason = ? WHERE id = ?', nowIso, ctx.user.id, 'Corregido', rep.id); /* la versión corregida sustituye a la original */
+  });
+  json(res, 200, { id: newId });
 });
 R('POST', '/api/charts/:id/advance', async (req, res, ctx) => {
   const a = chartFor(ctx.user, intId(ctx.params.id)); if (!a) return bad(res, 'notfound', 404);
@@ -597,13 +603,13 @@ R('GET', '/api/students/:id/work', async (req, res, ctx) => {
 const slugName = (n) => String(n).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'alumno';
 R('GET', '/api/students/:id/report.pdf', async (req, res, ctx) => {
   const u = studentOr404(ctx.params.id); if (!u) return bad(res, 'notfound', 404);
-  const lang = ctx.url.searchParams.get('lang') === 'es' ? 'es' : 'ca', buf = REP.studentPdf(studentModel(u), lang, todayLocal());
+  const lang = String(ctx.url.searchParams.get('lang') || '').toLowerCase() === 'es' ? 'es' : 'ca', buf = REP.studentPdf(studentModel(u), lang, todayLocal());
   audit(ctx.user.email, 'informe-pdf', u.email);
   res.writeHead(200, hdrs({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="informe-' + slugName(u.name) + '.pdf"', 'Content-Length': buf.length, 'Cache-Control': 'no-store' })); res.end(buf);
 }, { staff: true });
 R('GET', '/api/patients/:id/case.pdf', async (req, res, ctx) => {
   const p = db.get('SELECT * FROM patients WHERE id = ?', intId(ctx.params.id)); if (!p) return bad(res, 'notfound', 404);
-  const q = ctx.url.searchParams, full = q.get('full') === '1', lang = q.get('lang') === 'es' ? 'es' : 'ca', day = Math.min(60, Math.max(1, intId(q.get('day')) || 1));
+  const q = ctx.url.searchParams, full = q.get('full') === '1', lang = String(q.get('lang') || '').toLowerCase() === 'es' ? 'es' : 'ca', day = Math.min(60, Math.max(1, intId(q.get('day')) || 1));
   const d = JSON.parse(p.data), data = full ? d : PAT.forStudent(d);
   const orders = db.all('SELECT * FROM orders WHERE patient_id = ? AND active = 1 ORDER BY start_day, id', p.id).filter((o) => full || o.start_day <= day).map(orderOut);
   const events = db.all('SELECT * FROM events WHERE patient_id = ? ORDER BY day, id', p.id).filter((e) => full || e.day <= day).map(evOut);
@@ -613,7 +619,7 @@ R('GET', '/api/patients/:id/case.pdf', async (req, res, ctx) => {
   res.writeHead(200, hdrs({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="caso-' + p.code + (full ? '-completo' : '') + '.pdf"', 'Content-Length': buf.length, 'Cache-Control': 'no-store' })); res.end(buf);
 }, { staff: true });
 R('GET', '/api/reports.zip', async (req, res, ctx) => {
-  const lang = ctx.url.searchParams.get('lang') === 'es' ? 'es' : 'ca', pid = intId(ctx.url.searchParams.get('patient'));
+  const lang = String(ctx.url.searchParams.get('lang') || '').toLowerCase() === 'es' ? 'es' : 'ca', pid = intId(ctx.url.searchParams.get('patient'));
   const users = db.all("SELECT DISTINCT u.* FROM users u JOIN records r ON r.user_id = u.id JOIN charts c ON c.id = r.chart_id WHERE u.role = 'student' AND u.email NOT LIKE ?" + (pid ? ' AND c.patient_id = ?' : '') + ' ORDER BY u.name COLLATE NOCASE', ...(pid ? ['%@historia.local', pid] : ['%@historia.local']));
   if (!users.length) return bad(res, 'No hay registros de alumnado que descargar.', 404);
   const used = new Set(), files = users.map((u) => { let n = slugName(u.name), k = n, i = 2; while (used.has(k)) k = n + '_' + i++; used.add(k); return { name: k + '.pdf', data: REP.studentPdf(studentModel(u), lang, todayLocal()) }; });
@@ -876,7 +882,9 @@ R('PUT', '/api/rubric', async (req, res, ctx) => {
   const b = await readJson(req, 2e4); const out = [];
   for (const c of (Array.isArray(b.rubric) ? b.rubric : []).slice(0, 12)) {
     const es = U.clip(c.es, 120); if (!es) continue;
-    out.push({ id: 'c' + (out.length + 1), es, ca: U.clip(c.ca, 120) || es, w: Math.min(10, Math.max(1, intId(c.w) || 1)) });
+    const prev = new Set(getRubric().map((x) => x.id)); let id = typeof c.id === 'string' && /^[a-z0-9_]{1,24}$/.test(c.id) && !out.some((x) => x.id === c.id) ? c.id : '';
+    if (!id) { let n = 1; while (prev.has('c' + n) || out.some((x) => x.id === 'c' + n)) n++; id = 'c' + n; } /* los criterios nuevos no reutilizan ids ya usados */
+    out.push({ id, es, ca: U.clip(c.ca, 120) || es, w: Math.min(10, Math.max(1, intId(c.w) || 1)) });
   }
   if (!out.length) return bad(res, 'rubric');
   db.setSetting('rubric', JSON.stringify(out)); audit(ctx.user.email, 'rubrica', out.length + ' criterios'); json(res, 200, { ok: true });

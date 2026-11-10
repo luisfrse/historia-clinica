@@ -252,4 +252,5 @@ svg.bc .net { font-weight: 700; } svg.bc .net.neg { fill: #a12; }
 html.nocopy body,html.nocopy body *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 html.nocopy input,html.nocopy textarea,html.nocopy [contenteditable="true"]{-webkit-user-select:text;user-select:text}
 html.nocopy img{-webkit-user-drag:none;user-drag:none}
-@media print{html.nocopy body{display:none!important}}
+@media print{html.nocopy body:not(:has(.print-doc)){display:none!important}} /* el alumnado solo imprime la vista de «Imprimir», con su propio trabajo */
+@media (prefers-color-scheme: dark) { .consigna .cs-tasks li.ok { color: #86d9a4; } }

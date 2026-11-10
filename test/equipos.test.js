@@ -42,7 +42,9 @@ test('un mismo caso a varios equipos, uno por subgrupo del Campus', async () => 
 
   assert.strictEqual((await call('POST', '/api/patients/' + pid + '/assign', { mode: 'team', team_by: 'sub', subject: 'proyecto', team_name: 'Equipo', user_ids: ids.slice(0, 3) }, admin)).json.created, 2);
   const r = await call('POST', '/api/patients/' + pid + '/assign', { mode: 'team', team_by: 'sub', subject: 'proyecto', team_name: 'Grupo', user_ids: ids }, admin);
-  assert.deepStrictEqual(r.json, { created: 3, skipped: 1 }, 'A1, A2, B5 y uno sin subgrupo que se omite');
+  assert.deepStrictEqual(r.json, { created: 3, skipped: 0, no_sub: 1 }, 'A1, A2 y B5 (nombre distinto) y uno sin subgrupo que se omite');
+  const rep = await call('POST', '/api/patients/' + pid + '/assign', { mode: 'team', team_by: 'sub', subject: 'proyecto', team_name: 'Grupo', user_ids: ids }, admin);
+  assert.deepStrictEqual(rep.json, { created: 0, skipped: 3, no_sub: 1 }, 'repetir la asignación no duplica los equipos');
   const names = (await call('GET', '/api/patients/' + pid, null, admin)).json.charts.map((c) => c.name).sort();
   assert.ok(names.includes('Grupo A1') && names.includes('Grupo A2') && names.includes('Grupo B5') && names.includes('Equipo A1'), names.join(','));
   const g1 = (await call('GET', '/api/patients/' + pid, null, admin)).json.charts.find((c) => c.name === 'Grupo A1');
