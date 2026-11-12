@@ -169,7 +169,7 @@ R('GET', '/sso', async (req, res, ctx) => {
   db.run('UPDATE users SET last_login = ? WHERE id = ?', new Date().toISOString(), u.id);
   audit(u.email, 'login-sso', u.role);
   limSso.ok(ip);
-  const to = typeof p.to === 'string' && /^(consigna|chart)\/\d+$/.test(p.to) ? p.to : '';
+  const to = typeof p.to === 'string' && (/^(consigna|chart)\/\d+$/.test(p.to) || /^nhc\/[A-Za-z0-9._-]{1,30}$/.test(p.to)) ? p.to : '';
   res.writeHead(302, hdrs({ Location: '/' + (to ? '#/go/' + to : ''), 'Set-Cookie': setCookie(req, newSession(u.id), TTL / 1000), 'Cache-Control': 'no-store' })); res.end();
 }, { open: true });
 
@@ -401,9 +401,19 @@ R('PUT', '/api/catalog/:id', async (req, res, ctx) => {
 R('GET', '/api/audit', async (req, res) => json(res, 200, { rows: db.all('SELECT * FROM audit ORDER BY id DESC LIMIT 300') }), { staff: true });
 
 /* --- historias de trabajo (alumnado y profesorado) --- */
+/* Campus → Historia clínica: historias que tiene asignadas un alumno/a, con sus fechas. Petición firmada con el mismo secreto del acceso único (caduca en 60 s, un solo uso). */
+R('GET', '/api/campus/charts', async (req, res, ctx) => {
+  const p = SSO_SECRET ? SSO.verify(ctx.url.searchParams.get('t'), SSO_SECRET) : null;
+  if (!p || p.iss !== 'campus' || p.purpose !== 'charts' || !U.validEmail(String(p.email || ''))) return bad(res, 'auth', 401);
+  if (db.get('SELECT 1 x FROM sso_used WHERE jti = ?', String(p.jti))) return bad(res, 'used', 401);
+  db.run('INSERT INTO sso_used (jti, exp) VALUES (?,?)', String(p.jti), p.exp + 60e3);
+  const u = db.get('SELECT id FROM users WHERE lower(email) = ?', String(p.email).toLowerCase()); if (!u) return json(res, 200, { charts: [] });
+  const rows = db.all('SELECT c.id, c.kind, c.name, c.status, c.opens, c.closes, p.subjects, p.topics, p.data FROM chart_members m JOIN charts c ON c.id = m.chart_id JOIN patients p ON p.id = c.patient_id WHERE m.user_id = ? AND p.archived = 0 ORDER BY c.id DESC', u.id);
+  json(res, 200, { charts: rows.map((r) => ({ id: r.id, kind: r.kind, name: r.name, status: effStatus(r), window: chartWindow(r), opens: r.opens || '', closes: r.closes || '', nhc: String((JSON.parse(r.data) || {}).nhc || '').trim(), subjects: JSON.parse(r.subjects || '[]'), topics: JSON.parse(r.topics || '[]'), title: (consignaBrief(r.id) || {}).title || '' })) });
+}, { open: true });
 R('GET', '/api/my/charts', async (req, res, ctx) => {
   const rows = db.all('SELECT c.id, c.kind, c.name, c.status, c.opens, c.closes, p.id pid, p.code, p.data, (SELECT COUNT(*) FROM records r WHERE r.chart_id = c.id AND r.user_id = ? AND r.void_at IS NULL) mine, (SELECT COUNT(*) FROM records r WHERE r.chart_id = c.id AND r.void_at IS NULL) total FROM chart_members m JOIN charts c ON c.id = m.chart_id JOIN patients p ON p.id = c.patient_id WHERE m.user_id = ? AND p.archived = 0 ORDER BY c.id DESC', ctx.user.id, ctx.user.id);
-  json(res, 200, { charts: rows.map((r) => { const d = chartWindow(r) === 'scheduled' ? {} : PAT.forStudent(JSON.parse(r.data)); return { consigna: consignaBrief(r.id), consigna_id: chartMeta(r.id).consigna_id, id: r.id, kind: r.kind, name: r.name, status: r.status, ...chartMeta(r.id), code: r.code, patient: (d.nombre || '') + ' ' + (d.apellidos || ''), unidad: d.unidad || '', habitacion: d.habitacion || '', cama: d.cama || '', sexo: d.sexo || '', nacimiento: d.fecha_nacimiento || '', alergias: (d.alergias || []).map((x) => x.agente), sin_alergias: !!d.sin_alergias, diagnostico: d.diagnostico_medico || '', mine: r.mine, total: r.total }; }) });
+  json(res, 200, { charts: rows.map((r) => { const d = chartWindow(r) === 'scheduled' ? {} : PAT.forStudent(JSON.parse(r.data)); return { nhc: String((JSON.parse(r.data) || {}).nhc || '').trim(), consigna: consignaBrief(r.id), consigna_id: chartMeta(r.id).consigna_id, id: r.id, kind: r.kind, name: r.name, status: r.status, ...chartMeta(r.id), code: r.code, patient: (d.nombre || '') + ' ' + (d.apellidos || ''), unidad: d.unidad || '', habitacion: d.habitacion || '', cama: d.cama || '', sexo: d.sexo || '', nacimiento: d.fecha_nacimiento || '', alergias: (d.alergias || []).map((x) => x.agente), sin_alergias: !!d.sin_alergias, diagnostico: d.diagnostico_medico || '', mine: r.mine, total: r.total }; }) });
 });
 R('GET', '/api/charts/:id', async (req, res, ctx) => {
   const a = chartFor(ctx.user, intId(ctx.params.id));
