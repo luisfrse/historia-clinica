@@ -235,15 +235,15 @@
       const m = g.list[0]; if (!m) return panel(null, empty(t('gr_none')));
       return panel(t('tab_eval'), [h('div', { class: 'sc-big' }, m.total == null ? '—' : m.total, h('span', { class: 'sc-max' }, ' / 10')), h('table', { class: 'grid' }, h('tbody', null, rub.map((c) => h('tr', null, h('td', null, lbl(c)), h('td', { class: 'r' }, m.scores[c.id] != null ? t('lv' + m.scores[c.id]) : '—'))))), m.comment ? h('div', { class: 'cm' }, m.comment) : null]);
     }
-    return X.c.members.map((mb) => {
+    return [window.HC_AI ? window.HC_AI.groupPanel(X) : null].concat(X.c.members.map((mb) => {
       const cur = g.list.find((x) => x.user_id === mb.id) || { scores: {}, comment: '', published: false };
       const sels = {}; const tot = h('b'); const calc = () => { let sw = 0, acc = 0; rub.forEach((c) => { const v = sels[c.id].value; if (v !== '') { sw += c.w; acc += (c.w * Number(v)) / 4; } }); tot.textContent = sw ? (Math.round((acc / sw) * 100) / 10) + ' / 10' : '—'; };
       const cm = h('textarea', { value: cur.comment }), pub = h('input', { type: 'checkbox', checked: cur.published });
       rub.forEach((c) => { sels[c.id] = h('select', { onchange: calc }, h('option', { value: '' }, '—'), [0, 1, 2, 3, 4].map((v) => h('option', { value: v, selected: cur.scores[c.id] === v }, t('lv' + v)))); });
       calc();
-      return panel(mb.name + (X.c.chart.kind === 'team' ? '' : ''), [h('div', { class: 'cols' }, rub.map((c) => field(lbl(c) + ' (×' + c.w + ')', sels[c.id]))), field(t('gr_comment'), cm), h('label', { class: 'row' }, pub, t('gr_publish')),
+      return panel(mb.name + (X.c.chart.kind === 'team' ? '' : ''), [h('div', { class: 'cols' }, rub.map((c) => field(lbl(c) + ' (×' + c.w + ')', sels[c.id]))), field(t('gr_comment'), cm), h('label', { class: 'row' }, pub, t('gr_publish')), window.HC_AI ? h('p', { class: 'row' }, window.HC_AI.studentBtn(X, mb, cm)) : null,
         h('p', { class: 'row' }, h('span', null, t('gr_mark') + ': '), tot, h('button', { class: 'pri', onclick: async () => { const scores = {}; rub.forEach((c) => { scores[c.id] = sels[c.id].value; }); try { await api('PUT', '/api/charts/' + X.id + '/grades/' + mb.id, { scores, comment: cm.value, published: pub.checked }); toast(t('gr_saved')); X.refresh(); } catch (e) { fail(e); } } }, t('save')))]);
-    });
+    }));
   }
 
   function extraTabs(X) {

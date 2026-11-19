@@ -254,3 +254,4 @@ html.nocopy input,html.nocopy textarea,html.nocopy [contenteditable="true"]{-web
 html.nocopy img{-webkit-user-drag:none;user-drag:none}
 @media print{html.nocopy body:not(:has(.print-doc)){display:none!important}} /* el alumnado solo imprime la vista de «Imprimir», con su propio trabajo */
 @media (prefers-color-scheme: dark) { .consigna .cs-tasks li.ok { color: #86d9a4; } }
+dialog.ia { width: min(720px, 94vw); } dialog.ia textarea { width: 100%; min-height: 16em; box-sizing: border-box; } dialog.ia .err { color: var(--red); }

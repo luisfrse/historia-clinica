@@ -494,7 +494,8 @@ R('POST', '/api/records/:id/void', async (req, res, ctx) => {
 });
 R('POST', '/api/charts/:id/comments', async (req, res, ctx) => {
   const c = db.get('SELECT * FROM charts WHERE id = ?', intId(ctx.params.id)); if (!c) return bad(res, 'notfound', 404);
-  const b = await readJson(req, 8e3); const text = U.clipML(b.text, 2000); if (text.length < 2) return bad(res, 'texto');
+  const b = await readJson(req, 8e3); let text = U.clipML(b.text, 2000); if (text.length < 2) return bad(res, 'texto');
+  if (b.ai === true) text = U.clipML('[IA] ' + text.replace(/^\[IA\]\s*/, ''), 2000); /* borrador asistido por IA y revisado por el profesorado */
   let rid = null; if (b.record_id) { const rr = db.get('SELECT id FROM records WHERE id = ? AND chart_id = ?', intId(b.record_id), c.id); if (!rr) return bad(res, 'record'); rid = rr.id; }
   db.run('INSERT INTO comments (chart_id, record_id, user_id, text, created) VALUES (?,?,?,?,?)', c.id, rid, ctx.user.id, text, new Date().toISOString());
   json(res, 200, { ok: true });
@@ -906,6 +907,7 @@ function gradesFor(a, user) {
   const g = db.get('SELECT * FROM grades WHERE chart_id = ? AND user_id = ? AND published = 1', a.chart.id, user.id);
   return g ? { rubric: getRubric(), list: [gradeOut(g)] } : { rubric: [], list: [] };
 }
+require('./lib/ai-feedback')({ R, db, json, readJson, audit, bad, intId, getRubric, ai: require('./lib/ai').create({ db }) });   /* IA (Claude): borrador de feedback; solo propone */
 R('GET', '/api/rubric', async (req, res) => json(res, 200, { rubric: getRubric() }), { staff: true });
 R('PUT', '/api/rubric', async (req, res, ctx) => {
   const b = await readJson(req, 2e4); const out = [];
