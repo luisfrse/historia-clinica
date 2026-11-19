@@ -44,7 +44,7 @@
     const r = await fetch(url, { method, credentials: 'same-origin', headers: { 'X-Requested-With': 'historia', 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
     let j = null; try { j = await r.json(); } catch (_) {}
     if (r.status === 401 && !url.startsWith('/api/admin/login') && !url.startsWith('/api/teacher/login')) { ME = null; renderLogin(); throw new Error('auth'); }
-    if (!r.ok) { const e = new Error((j && j.error) || 'error'); e.status = r.status; throw e; }
+    if (!r.ok) { const e = new Error((j && j.error) || 'error'); e.status = r.status; e.data = j; throw e; }
     return j;
   }
   const fail = (e) => { if (e.message === 'preview') return toast(t('prev_ro'), true); if (e.message === 'day-closed') return toast(t('dy_closed'), true); if (e.message === 'last-day') return toast(t('dy_last'), true); if (e.message !== 'auth') { const k = 'e_' + String(e.message).replace(/-/g, '_'), tx = e.message ? t(k) : ''; toast(tx && tx !== k ? tx : t('err') + (e.message && e.message !== 'error' ? ' (' + e.message + ')' : ''), true); } };

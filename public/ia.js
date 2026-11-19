@@ -23,7 +23,7 @@
   });
   const fmt = (s, o) => String(s).replace(/\{(\w+)\}/g, (m, k) => (o[k] != null ? o[k] : m));
   const money = (n) => (Math.round(n * 100) / 100).toFixed(2);
-  const errMsg = (e) => { const code = String((e && e.message) || '').replace(/-/g, '_'); const k = 'ia_err_' + code; const v = t(k); return v && v !== k ? v : (e && e.message) || 'Error'; };
+  const errMsg = (e) => { const code = String((e && e.message) || '').replace(/-/g, '_'); const k = 'ia_err_' + code; const v = t(k); const base = v && v !== k ? v : (e && e.message) || 'Error'; return code === 'ai_error' && e.data && e.data.message ? base + ' ' + String(e.data.message).slice(0, 260) : base; };
 
   /* Diálogo: estimación -> confirmar -> borrador editable. opts: { chartId, userId (opcional), title, actions: [{label, run(text, close)}] } */
   async function open(opts) {
