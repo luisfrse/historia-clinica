@@ -173,6 +173,25 @@ R('GET', '/sso', async (req, res, ctx) => {
   res.writeHead(302, hdrs({ Location: '/' + (to ? '#/go/' + to : ''), 'Set-Cookie': setCookie(req, newSession(u.id), TTL / 1000), 'Cache-Control': 'no-store' })); res.end();
 }, { open: true });
 
+/* Acceso unico desde Control (panel de control de las aplicaciones): enlace firmado de un solo uso (lib/control-sso.js, copia de Control/lib/sso-agent.js).
+   Solo existe con CONTROL_SSO_SECRET; entra como el primer usuario administrador. La contrasena de administracion sigue funcionando. */
+const CONTROL_SSO = require('./lib/control-sso').createVerifier(process.env.CONTROL_SSO_SECRET || '');
+R('GET', '/api/control/sso', async (req, res, ctx) => {
+  if (!process.env.CONTROL_SSO_SECRET) return json(res, 404, { error: 'notfound' });
+  const ip = ipOf(req);
+  const fail = (code, m) => { res.writeHead(code, hdrs({ 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' })); res.end(m); };
+  if (limSso.blocked(ip)) return fail(429, 'Demasiados intentos.');
+  limSso.fail(ip);
+  const r = CONTROL_SSO(ctx.url.searchParams.get('t'));
+  if (!r.ok) { audit('control', 'sso-rechazado', r.error); return fail(403, 'Enlace de acceso no valido o caducado.'); }
+  const u = db.get("SELECT * FROM users WHERE role = 'admin' AND active = 1 ORDER BY id LIMIT 1");
+  if (!u) return fail(403, 'No hay ningun usuario administrador en Historia clinica.');
+  db.run('UPDATE users SET last_login = ? WHERE id = ?', new Date().toISOString(), u.id);
+  audit(u.email, 'login-control', u.role);
+  limSso.ok(ip);
+  res.writeHead(302, hdrs({ Location: '/', 'Set-Cookie': setCookie(req, newSession(u.id), TTL / 1000), 'Cache-Control': 'no-store' })); res.end();
+}, { open: true });
+
 R('POST', '/api/admin/login', async (req, res) => {
   const ip = ipOf(req);
   if (!ADMIN_PASSWORD) return bad(res, 'disabled', 503);
