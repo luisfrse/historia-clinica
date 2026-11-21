@@ -83,5 +83,12 @@ npm start       # http://localhost:3000 (usa ADMIN_PASSWORD=... para entrar sin 
 - **Evaluación**: rúbrica editable (criterios 0–4 con peso), nota 0–10 por alumno y caso, publicada o no al alumnado, exportación CSV y botón **Enviar al Campus** (pestaña Notas): elige asignatura, categoría (teoría, prácticas o seguimiento, obligatoria), unidad (RA) y peso, y crea en el Campus una prueba oculta con la nota de cada alumno con nota publicada. Reenviar actualiza la misma prueba sin tocar la categoría/unidad/peso ni las notas editadas a mano en el Campus. Las unidades se cargan con "Sincronizar" en Usuarios.
 - **Impresión**: la historia completa se imprime o se guarda en PDF desde el navegador.
 
+## Diseño común y comprobaciones
+
+- Aspecto: **diseño común** de las apps de Luis, copiado en `public/dc/` (versión y huellas en `public/dc/VERSION.json`). Actualizar: `npm run dc` (copia desde `../diseno-comun`), revisar `git diff public/dc` y probar. El CSS propio es `public/app.css` (solo disposición; el color sale de `--dc-*`); los iconos que faltan en el común están en `public/iconos-app.js`.
+- Iconos PWA: `node ../diseno-comun/iconos/generar-iconos-app.js --app historia-clinica --out public/icons`. Sin service worker (no hay uso sin conexión).
+- CSP estricta: `default-src 'none'`, `style-src 'self'`, `font-src 'self'`, sin estilos ni scripts en línea (los anchos propios van en clases o por CSSOM).
+- `npm test` (pruebas de API), `npm run e2e` (Chrome real: entrada, panel, alumnado, desbordes a 360 px, objetivos táctiles, CSP, sin diálogos nativos) y `npm run capturas` (390 y 1200 px, claro y oscuro, es/ca, datos inventados en `docs/capturas/`). Las dos últimas necesitan Chrome (variable `CHROME` si no está en la ruta habitual).
+
 ## Pendiente
 

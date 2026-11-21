@@ -137,7 +137,7 @@
     }
     const body = h('div', { class: 'wz-body' }), nav = h('div', { class: 'wz-nav' }), bar = h('div', { class: 'wz-bar', role: 'tablist' }), errBox = h('div', { class: 'wz-err', role: 'alert' });
     const w = h('input', { type: 'datetime-local', value: X.caseDate ? X.caseDate + 'T' + nowInput().slice(11) : nowInput(), min: X.caseDate ? X.caseDate + 'T00:00' : null, max: X.caseDate ? X.caseDate + 'T23:59' : null });
-    const tip = (key, ex) => h('details', { class: 'wz-tip', open: true }, h('summary', null, '💡 ' + t('pai_hint')), h('p', null, t(key)), ex ? h('p', { class: 'wz-ex' }, h('b', null, t('pai_example') + ': '), t(ex)) : null);
+    const tip = (key, ex) => h('details', { class: 'wz-tip', open: true }, h('summary', null, HC.ico('info'), ' ' + t('pai_hint')), h('p', null, t(key)), ex ? h('p', { class: 'wz-ex' }, h('b', null, t('pai_example') + ': '), t(ex)) : null);
     const sel = (opts, val, on) => h('select', { onchange: (e) => on(e.target.value) }, opts.map(([v, l]) => h('option', { value: v, selected: String(v) === String(val) }, l)));
     const csv = (s) => s.split(',').map((x) => x.trim()).filter(Boolean);
 
@@ -216,7 +216,7 @@
         const rows = h('div'), drawRows = () => { clear(rows); n.act.forEach((a) => add(rows, h('label', { class: 'row' }, h('input', { type: 'checkbox', checked: a.on, onchange: (e) => { a.on = e.target.checked; } }), a.t))); }; drawRows();
         const cu = h('input', { type: 'text', placeholder: t('pai_act_custom'), 'aria-label': t('pai_act_custom') });
         add(list, h('div', { class: 'wz-card' }, h('div', { class: 'row' }, h('span', { class: 'ev-kind' }, 'NIC'), h('b', null, lab(n.e)), h('span', { class: 'grow' }), h('button', { type: 'button', class: 'sm danger', onclick: () => { S.nic.splice(k, 1); redraw(); } }, t('pai_remove'))),
-          n.e.who === 'nurse' ? h('p', { class: 'mut' }, '⚠ ' + t('pai_nurse_tech')) : null, h('b', null, t('pai_acts')), rows, h('div', { class: 'row' }, cu, h('button', { type: 'button', class: 'sm', onclick: () => { const v = cu.value.trim(); if (v) { n.act.push({ t: v, on: true }); cu.value = ''; redraw(); } } }, t('pai_act_add'))),
+          n.e.who === 'nurse' ? h('p', { class: 'mut' }, HC.ico('alert'), ' ' + t('pai_nurse_tech')) : null, h('b', null, t('pai_acts')), rows, h('div', { class: 'row' }, cu, h('button', { type: 'button', class: 'sm', onclick: () => { const v = cu.value.trim(); if (v) { n.act.push({ t: v, on: true }); cu.value = ''; redraw(); } } }, t('pai_act_add'))),
           h('div', { class: 'cols' }, field(t('pai_who'), sel(Object.keys(WHO_LABEL).map((v) => [v, t(WHO_LABEL[v])]), n.quien, (v) => { n.quien = v; })), field(t('pai_freq'), h('input', { type: 'text', value: n.freq, placeholder: t('pai_freq_ph'), oninput: (e) => { n.freq = e.target.value; } })))));
       });
       return out;
@@ -232,7 +232,7 @@
 
     /* paso 5 */
     const step4 = () => {
-      const d = build(), ok = (c) => h('li', { class: c.ok ? 'ok' : 'bad' }, (c.ok ? '✓ ' : '✗ ') + c.t);
+      const d = build(), ok = (c) => h('li', { class: c.ok ? 'ok' : 'bad' }, HC.ico(c.ok ? 'check-circle' : 'x-circle'), ' ' + c.t);
       const checks = [{ ok: !check[1]().length && !check[0]().length, t: t('pai_check_dx') }, { ok: !check[2]().length, t: t('pai_check_noc') }, { ok: !check[3]().length, t: t('pai_check_nic') }];
       return [tip('pai_h5'), h('ul', { class: 'wz-check' }, checks.map(ok)), h('div', { class: 'panel plan' }, h('div', { class: 'pb' }, paiBody(d, []))),
         h('div', { class: 'cols' }, field(t('pai_prio'), sel([['alta', t('pl_high')], ['media', t('pl_mid')], ['baja', t('pl_low')]], S.prioridad, (v) => { S.prioridad = v; })), field(t('when'), w))];
@@ -315,7 +315,7 @@
       add(listBox, rows.length ? panel(null, h('div', { class: 'tw' }, h('table', { class: 'grid' }, h('tbody', null, rows.map((e) => h('tr', { class: e.active ? '' : 'void' }, h('td', null, e.code || '—'), h('td', null, h('b', null, lab(e)), e.custom ? h('span', { class: 'chip' }, t('tx_custom')) : null, e.active ? null : h('span', { class: 'chip amb' }, t('tx_inactive')),
         h('div', { class: 'sub' }, Object.values(e.items_es || {}).reduce((a, b) => a + b.length, 0) + ' ' + t('tx_items') + (kind === 'nanda' ? ' · NOC ' + ((e.links || {}).noc || []).length + ' · NIC ' + ((e.links || {}).nic || []).length : ''))),
         h('td', null, h('div', { class: 'row' }, h('button', { class: 'sm', onclick: () => editor(e, kind) }, t('edit')), h('button', { class: 'sm', onclick: async () => { try { await api('PUT', '/api/taxonomy/' + e.id, { active: !e.active }); await reload(); } catch (er) { fail(er); } } }, e.active ? t('tx_off') : t('tx_on')),
-          h('button', { class: 'sm danger', onclick: async () => { if (!confirm(t('tx_confirm_del'))) return; try { await api('DELETE', '/api/taxonomy/' + e.id); await reload(); } catch (er) { fail(er); } } }, t('delete'))))))))), { flush: true }) : panel(null, empty(t('tx_empty'))));
+          h('button', { class: 'sm danger', onclick: async () => { if (!(await HC.confirm(t('tx_confirm_del'), { danger: true, yes: t('delete') }))) return; try { await api('DELETE', '/api/taxonomy/' + e.id); await reload(); } catch (er) { fail(er); } } }, t('delete'))))))))), { flush: true }) : panel(null, empty(t('tx_empty'))));
     }
     const csvTa = h('textarea', { rows: 6, placeholder: 'tipo;codigo;es;ca;elementos;elementos_mp' });
     drawList();

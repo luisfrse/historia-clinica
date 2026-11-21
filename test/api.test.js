@@ -145,3 +145,15 @@ test('CSRF: una escritura sin cabecera se rechaza', async () => {
   const r = await fetch(base + '/api/me', { method: 'PUT', headers: { Cookie: ana, 'Content-Type': 'application/json' }, body: '{}' });
   assert.strictEqual(r.status, 403);
 });
+
+test('entrada: el error de contraseña dice cuántos intentos quedan y el bloqueo, cuánto esperar', async () => {
+  const U = require('../lib/util');
+  const lim = U.limiter(3, 60e3);
+  assert.strictEqual(lim.left('k'), 3);
+  lim.fail('k'); assert.strictEqual(lim.left('k'), 2);
+  lim.fail('k'); lim.fail('k'); assert.strictEqual(lim.left('k'), 0); assert.ok(lim.blocked('k'));
+  assert.ok(lim.wait('k') > 0 && lim.wait('k') <= 60);
+  const r = await call('POST', '/api/teacher/login', { email: 'nadie@x.com', password: 'mal' });
+  assert.strictEqual(r.status, 401); assert.strictEqual(typeof r.json.left, 'number');
+  await call('POST', '/api/admin/login', { password: 'clave-admin-larga' }); /* un acierto reinicia el contador */
+});

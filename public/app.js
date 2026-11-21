@@ -1,7 +1,35 @@
 'use strict';
 (function () {
-  const main = document.getElementById('main'), top = document.getElementById('top'), toastEl = document.getElementById('toast');
-  let ME = null, LANG = (navigator.language || 'es').startsWith('ca') ? 'ca' : 'es', chartKey = 0, chartUser = '';
+  const main = document.getElementById('main'), top = document.getElementById('top'), toastEl = document.getElementById('toast'), navEl = document.getElementById('nav'), shell = document.getElementById('shell');
+  let ME = null, LANG = (navigator.language || 'es').startsWith('ca') ? 'ca' : 'es', chartKey = 0, chartUser = '', loadTimer = 0, tickTimer = 0;
+
+  /* Textos del diseño nuevo (entrada, cabecera, tarjetas, avisos, diálogos). */
+  Object.assign(window.I18N.es, {
+    theme: 'Tema', theme_auto: 'automático', theme_dark: 'oscuro', theme_light: 'claro', theme_change: 'Cambiar tema (ahora {m})', lang_to: 'Cambiar idioma', go_home: 'Ir al inicio', menu_main: 'Secciones',
+    en_sub: 'Prácticas de Enfermería y TCAE', en_campus_lead: 'Alumnado y profesorado entran desde el Campus: la sesión se reconoce sola.', en_campus_btn: 'Entrar con el Campus', en_staff: 'Profesorado y administración', en_staff_help: 'Con tu correo y contraseña de profesorado. Si eres administrador/a, deja el correo vacío y escribe solo la contraseña de administración.',
+    en_email: 'Correo del profesorado', en_email_hint: 'Vacío = administración', en_pw: 'Contraseña', en_show: 'Mostrar contraseña', en_hide: 'Ocultar contraseña', en_caps: 'Tienes las mayúsculas activadas.', en_enter: 'Entrar', en_checking: 'Comprobando…',
+    en_pw_empty: 'Escribe la contraseña.', en_bad: 'Correo o contraseña incorrectos.', en_left: 'Te quedan {n} intentos.', en_left1: 'Te queda 1 intento: si fallas, tendrás que esperar unos minutos.', en_wait: 'Demasiados intentos. Podrás volver a probar en {t}.', en_wait_done: 'Ya puedes volver a intentarlo.', en_wait_unk: 'Demasiados intentos. Espera unos minutos antes de volver a probar.',
+    en_net: 'No se pudo conectar con el servidor. Comprueba la conexión.', en_off: 'El acceso de administración no está activado en este servidor.', en_err: 'Algo ha fallado. Inténtalo de nuevo.', en_note: 'Todos los pacientes y datos son ficticios. Cada acceso queda registrado.',
+    off_title: 'Sin conexión', off_text: 'No se puede hablar con el servidor. Comprueba la conexión e inténtalo de nuevo.', retry: 'Reintentar', loading: 'Cargando…', confirm_title: 'Confirmar', confirm_yes: 'Sí, continuar',
+    fl_high: 'alto', fl_low: 'bajo', fl_legend: 'Fuera de rango (adulto, orientativo): flecha arriba = alto, flecha abajo = bajo.', in_range: 'En rango',
+    st_done: 'Hecho', st_pending: 'Pendiente', st_out: 'Fuera de rango', mine_cards_prog: 'Consigna', mine_n: '{n} registros míos', open_chart: 'Abrir historia',
+    kpi_patients: 'Pacientes', kpi_charts: 'Historias', kpi_records: 'Registros', kpi_unassigned: 'Sin asignar', kpi_unassigned_help: 'Pacientes sin ninguna historia: el alumnado no los ve.', kpi_archived: 'Archivados',
+    seg_idle: 'Sin actividad', seg_idle_help: 'Sin registros', seg_stale: 'Parado', seg_ok: 'En marcha', seg_alerts: 'Alertas', seg_late: 'Fuera de plazo', tasks_done: 'tareas hechas', prog_of: '{a} de {b}',
+    allergies_short: 'Alergias', empty_find: 'Nada coincide con la búsqueda.', ask_short: 'Escribe al menos {n} caracteres.', nav_catalog_s: 'Catálogo', seg_active: '{a} de {b} con actividad', assigned_short: 'Asignado',
+  });
+  Object.assign(window.I18N.ca, {
+    theme: 'Tema', theme_auto: 'automàtic', theme_dark: 'fosc', theme_light: 'clar', theme_change: 'Canviar tema (ara {m})', lang_to: "Canviar d'idioma", go_home: "Anar a l'inici", menu_main: 'Seccions',
+    en_sub: 'Pràctiques d\'Infermeria i TCAE', en_campus_lead: 'Alumnat i professorat entren des del Campus: la sessió es reconeix sola.', en_campus_btn: 'Entrar amb el Campus', en_staff: 'Professorat i administració', en_staff_help: "Amb el teu correu i contrasenya de professorat. Si ets administrador/a, deixa el correu buit i escriu només la contrasenya d'administració.",
+    en_email: 'Correu del professorat', en_email_hint: 'Buit = administració', en_pw: 'Contrasenya', en_show: 'Mostrar la contrasenya', en_hide: 'Amagar la contrasenya', en_caps: 'Tens les majúscules activades.', en_enter: 'Entrar', en_checking: 'Comprovant…',
+    en_pw_empty: 'Escriu la contrasenya.', en_bad: 'Correu o contrasenya incorrectes.', en_left: 'Et queden {n} intents.', en_left1: 'Et queda 1 intent: si falles, hauràs d\'esperar uns minuts.', en_wait: 'Massa intents. Podràs tornar a provar d\'aquí a {t}.', en_wait_done: 'Ja pots tornar-ho a intentar.', en_wait_unk: 'Massa intents. Espera uns minuts abans de tornar a provar.',
+    en_net: "No s'ha pogut connectar amb el servidor. Comprova la connexió.", en_off: "L'accés d'administració no està activat en aquest servidor.", en_err: "Alguna cosa ha fallat. Torna-ho a provar.", en_note: 'Tots els pacients i dades són fictícis. Cada accés queda registrat.',
+    off_title: 'Sense connexió', off_text: "No es pot parlar amb el servidor. Comprova la connexió i torna-ho a provar.", retry: 'Reintentar', loading: 'Carregant…', confirm_title: 'Confirmar', confirm_yes: 'Sí, continuar',
+    fl_high: 'alt', fl_low: 'baix', fl_legend: 'Fora de rang (adult, orientatiu): fletxa amunt = alt, fletxa avall = baix.', in_range: 'En rang',
+    st_done: 'Fet', st_pending: 'Pendent', st_out: 'Fora de rang', mine_cards_prog: 'Consigna', mine_n: '{n} registres meus', open_chart: 'Obrir història',
+    kpi_patients: 'Pacients', kpi_charts: 'Històries', kpi_records: 'Registres', kpi_unassigned: 'Sense assignar', kpi_unassigned_help: "Pacients sense cap història: l'alumnat no els veu.", kpi_archived: 'Arxivats',
+    seg_idle: 'Sense activitat', seg_idle_help: 'Sense registres', seg_stale: 'Aturat', seg_ok: 'En marxa', seg_alerts: 'Alertes', seg_late: 'Fora de termini', tasks_done: 'tasques fetes', prog_of: '{a} de {b}',
+    allergies_short: 'Al·lèrgies', empty_find: 'Res no coincideix amb la cerca.', ask_short: 'Escriu almenys {n} caràcters.', nav_catalog_s: 'Catàleg', seg_active: '{a} de {b} amb activitat', assigned_short: 'Assignat',
+  });
 
   /* Textos nuevos de la interfaz clínica (se suman a los de i18n.js). */
   Object.assign(window.I18N.es, {
@@ -9,7 +37,7 @@
     tab_resumen: 'Resumen', tab_evolucion: 'Evolución', tab_constantes: 'Constantes', tab_balance: 'Balance hídrico', tab_cuidados: 'Cuidados', tab_ficha: 'Ficha', tab_asignar: 'Asignación', tab_historias: 'Historias', tab_actividad: 'Actividad',
     f_age: 'Edad', age_years: 'años', b_dob: 'F. nacimiento', b_loc: 'Ubicación', allergies: 'Alergias', allergies_none: 'Sin alergias conocidas', allergies_unk: 'Alergias no registradas',
     p_admission: 'Datos del ingreso', p_last_vitals: 'Últimas constantes', p_last_note: 'Última nota de evolución', worklist: 'Lista de pacientes', no_data: 'Sin datos todavía.',
-    fl_param: 'Parámetro', fl_legend: 'Fuera de rango (adulto, orientativo): ▲ alto, ▼ bajo.', fl_voided: 'Anulado', bal_day: 'Día', bal_in: 'Entradas (ml)', bal_out: 'Salidas (ml)', bal_net: 'Balance (ml)', ask_ok: 'Aceptar', today_rec: 'Registrar ahora',
+    fl_param: 'Parámetro', fl_voided: 'Anulado', bal_day: 'Día', bal_in: 'Entradas (ml)', bal_out: 'Salidas (ml)', bal_net: 'Balance (ml)', ask_ok: 'Aceptar', today_rec: 'Registrar ahora',
     nav_help: 'Ayuda', tb_record: 'Registrar', comments_by: 'Comentario de', open_it: 'Abrir', teacher_only: 'Solo profesorado: el alumnado no ve este apartado',
   });
   Object.assign(window.I18N.ca, {
@@ -17,7 +45,7 @@
     tab_resumen: 'Resum', tab_evolucion: 'Evolució', tab_constantes: 'Constants', tab_balance: 'Balanç hídric', tab_cuidados: 'Cures', tab_ficha: 'Fitxa', tab_asignar: 'Assignació', tab_historias: 'Històries', tab_actividad: 'Activitat',
     f_age: 'Edat', age_years: 'anys', b_dob: 'D. naixement', b_loc: 'Ubicació', allergies: 'Al·lèrgies', allergies_none: 'Sense al·lèrgies conegudes', allergies_unk: 'Al·lèrgies no registrades',
     p_admission: "Dades de l'ingrés", p_last_vitals: 'Últimes constants', p_last_note: "Última nota d'evolució", worklist: 'Llista de pacients', no_data: 'Sense dades encara.',
-    fl_param: 'Paràmetre', fl_legend: 'Fora de rang (adult, orientatiu): ▲ alt, ▼ baix.', fl_voided: 'Anul·lat', bal_day: 'Dia', bal_in: 'Entrades (ml)', bal_out: 'Sortides (ml)', bal_net: 'Balanç (ml)', ask_ok: 'Acceptar', today_rec: 'Registrar ara',
+    fl_param: 'Paràmetre', fl_voided: 'Anul·lat', bal_day: 'Dia', bal_in: 'Entrades (ml)', bal_out: 'Sortides (ml)', bal_net: 'Balanç (ml)', ask_ok: 'Acceptar', today_rec: 'Registrar ara',
     nav_help: 'Ajuda', tb_record: 'Registrar', comments_by: 'Comentari de', open_it: 'Obrir', teacher_only: "Només professorat: l'alumnat no veu aquest apartat",
   });
   const t = (k) => (window.I18N[LANG] && window.I18N[LANG][k]) || window.I18N.es[k] || k;
@@ -29,6 +57,7 @@
       if (v == null || v === false) continue;
       if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
       else if (k === 'class') el.className = v;
+      else if (k === 'style') el.style.cssText = v;
       else if (k === 'value') el.value = v;
       else if (k === 'checked' || k === 'selected' || k === 'disabled' || k === 'required') el[k] = !!v;
       else el.setAttribute(k, v === true ? '' : v);
@@ -38,8 +67,22 @@
   }
   function add(el, c) { if (c == null || c === false) return; if (Array.isArray(c)) c.forEach((x) => add(el, x)); else el.appendChild(c.nodeType ? c : document.createTextNode(String(c))); }
   function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
-  function show(...nodes) { clear(main); nodes.forEach((n) => add(main, n)); main.focus({ preventScroll: true }); window.scrollTo(0, 0); }
-  function toast(msg, err) { toastEl.textContent = msg; toastEl.className = 'show' + (err ? ' err' : ''); clearTimeout(toast.t); toast.t = setTimeout(() => { toastEl.className = ''; }, 3500); }
+  /* Iconos del diseño común (sin emojis). */
+  const ico = (n, label) => { const s = h('span', { class: 'dc-icon', 'aria-hidden': label ? null : 'true' }); s.appendChild(window.DCIcons.svg(n, label)); return s; };
+  function show(...nodes) { clearTimeout(loadTimer); main.removeAttribute('aria-busy'); clear(main); nodes.forEach((n) => add(main, n)); labelTables(); main.focus({ preventScroll: true }); window.scrollTo(0, 0); }
+  /* En el móvil las tablas anchas se apilan: cada celda lleva la etiqueta de su columna (data-label). Se repite cuando una pantalla repinta su lista. */
+  function labelTables() {
+    main.querySelectorAll('table.grid:not(.mar):not(.rt-no)').forEach((tb) => {
+      if (tb.classList.contains('rt') && tb.dataset.lbl === '1') return;
+      const hs = [...tb.querySelectorAll('thead th')]; if (!hs.length || hs.length > 10) return;
+      const names = hs.map((x) => x.textContent.trim()); let ok = false;
+      tb.querySelectorAll('tbody tr').forEach((tr) => { if (tr.children.length !== names.length) return; ok = true; [...tr.children].forEach((td, i) => { if (!td.hasAttribute('data-label')) td.setAttribute('data-label', names[i]); }); });
+      if (ok) { tb.classList.add('rt'); tb.dataset.lbl = '1'; }
+    });
+  }
+  new MutationObserver(() => { cancelAnimationFrame(labelTables.raf); labelTables.raf = requestAnimationFrame(labelTables); }).observe(main, { childList: true, subtree: true });
+  function showLoading() { main.setAttribute('aria-busy', 'true'); clear(main); add(main, h('div', { class: 'dc-state', role: 'status' }, h('span', { class: 'dc-spinner' }), h('p', { class: 'dc-muted' }, t('loading')))); }
+  function toast(msg, err) { clear(toastEl); add(toastEl, h('div', { class: 'dc-toast' + (err ? ' err' : ''), role: err ? 'alert' : null }, ico(err ? 'alert' : 'check-circle'), h('span', null, msg))); clearTimeout(toast.t); toast.t = setTimeout(() => clear(toastEl), err ? 6000 : 3500); }
   async function api(method, url, body) {
     const r = await fetch(url, { method, credentials: 'same-origin', headers: { 'X-Requested-With': 'historia', 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
     let j = null; try { j = await r.json(); } catch (_) {}
@@ -56,61 +99,138 @@
   const ageOf = (iso) => { if (!iso) return ''; const b = new Date(iso), n = new Date(); let a = n.getFullYear() - b.getFullYear(); if (n < new Date(n.getFullYear(), b.getMonth(), b.getDate())) a--; return a >= 0 ? a : ''; };
   let fid = 0; const field = (label, input) => { const c = input && (input.matches && input.matches('input,select,textarea') ? input : input.querySelector && input.querySelector('input,select,textarea')); if (c && !c.id) c.id = 'hf' + (++fid); return h('div', null, h('label', c ? { for: c.id } : null, label), input); };
   const name = (d) => (d.apellidos || '') + ', ' + (d.nombre || '');
-  const stateChip = (open) => h('span', { class: 'chip ' + (open ? 'grn' : 'amb') }, open ? t('status_open') : t('status_closed'));
+  const stateChip = (open) => h('span', { class: 'chip ' + (open ? 'grn' : 'amb') }, ico(open ? 'check-circle' : 'lock'), open ? t('status_open') : t('status_closed'));
+  /* resultado de un cuidado: icono + color + texto (nunca solo color) */
+  const RES = { realizado: ['grn', 'check-circle'], rechazado: ['red', 'x-circle'], no_tolerado: ['amb', 'alert'], pendiente: ['gry', 'clock'] };
+  const resChip = (r) => { const m = RES[r] || ['gry', 'info']; return h('span', { class: 'chip ' + m[0] }, ico(m[1]), t('res_' + r)); };
+  const flagIco = (fl) => (fl ? h('span', { class: 'dc-icon', role: 'img', 'aria-label': t(fl === 'hi' ? 'fl_high' : 'fl_low') }, window.DCIcons.svg(fl === 'hi' ? 'arrow-up' : 'arrow-down')) : null);
+  const meter = (pct, cls) => { const m = h('div', { class: 'dc-meter' + (cls ? ' ' + cls : ''), role: 'meter', 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': Math.round(pct) }, h('span')); m.style.setProperty('--dc-value', Math.max(0, Math.min(100, pct)) + '%'); return m; };
   const panel = (title, body, opts) => h('div', { class: 'panel' + (opts && opts.cls ? ' ' + opts.cls : '') }, title ? h('div', { class: 'ph' }, title, opts && opts.right) : null, h('div', { class: 'pb' + (opts && opts.flush ? ' flush' : '') }, body));
-  const empty = (msg) => h('div', { class: 'empty' }, msg || t('no_data'));
+  const empty = (msg, icon) => h('div', { class: 'empty' }, h('div', { class: 'dc-state' }, h('span', { class: 'dc-state__icon' }, ico(icon || 'file')), h('p', null, msg || t('no_data'))));
 
   /* Pregunta con texto libre en un diálogo (anular, comentar). Devuelve el texto o null. */
   function ask(title, label, min) {
     return new Promise((resolve) => {
-      const ta = h('textarea'); let done = false;
-      const dlg = h('dialog', null, h('form', { onsubmit: (e) => { e.preventDefault(); if (ta.value.trim().length < (min || 1)) { ta.focus(); return; } finish(ta.value.trim()); } },
-        h('div', { class: 'dh' }, title), h('div', { class: 'db' }, label ? h('p', { class: 'mut' }, label) : null, ta),
+      const ta = h('textarea', { 'aria-label': title }), er = h('p', { class: 'wz-err', role: 'alert', hidden: true }); let done = false;
+      const dlg = h('dialog', { 'aria-label': title }, h('form', { onsubmit: (e) => { e.preventDefault(); if (ta.value.trim().length < (min || 1)) { er.hidden = false; er.textContent = t('ask_short').replace('{n}', min || 1); ta.setAttribute('aria-invalid', 'true'); ta.focus(); return; } finish(ta.value.trim()); } },
+        h('div', { class: 'dh' }, title), h('div', { class: 'db' }, label ? h('p', { class: 'mut' }, label) : null, ta, er),
         h('div', { class: 'df' }, h('button', { type: 'button', onclick: () => finish(null) }, t('cancel')), h('button', { class: 'pri', type: 'submit' }, t('ask_ok')))));
       function finish(v) { if (done) return; done = true; try { dlg.close(); } catch (_) {} dlg.remove(); resolve(v); }
       dlg.addEventListener('cancel', () => finish(null));
       document.body.appendChild(dlg); dlg.showModal(); ta.focus();
     });
   }
-
-  /* ---------- barra de aplicación ---------- */
-  function renderTop() {
-    clear(top);
-    add(top, h('span', { class: 'brand' }, h('img', { src: '/favicon-32.png', alt: '' }), h('span', { class: 'bt' }, t('app'))));
-    if (ME) {
-      const seg = location.hash.replace(/^#\/?/, '').split('/')[0];
-      const cur = seg === 'students' || seg === 'catalog' || seg === 'taxonomy' || seg === 'audit' || seg === 'grades' || seg === 'help' ? seg : 'home';
-      const items = ME.staff ? [['home', '#/', 'nav_patients'], ['students', '#/students', 'nav_students'], ['catalog', '#/catalog', 'nav_catalog'], ['grades', '#/grades', 'nav_grades'], ['audit', '#/audit', 'nav_audit'], ['help', '#/help', 'nav_help']] : [['home', '#/', 'nav_mine'], ['help', '#/help', 'nav_help']];
-      add(top, h('nav', { 'aria-label': 'Principal' }, items.map(([k, href, l]) => h('button', { class: cur === k ? 'on' : '', onclick: () => { location.hash = href; } }, t(l)))));
-      add(top, h('span', { class: 'who' }, ME.name));
-    } else add(top, h('nav'));
-    add(top, h('button', { class: 'tb', 'aria-label': t('lang'), onclick: () => { LANG = LANG === 'es' ? 'ca' : 'es'; document.documentElement.lang = LANG; if (ME) api('PUT', '/api/me', { lang: LANG }).catch(() => {}); renderTop(); ME ? route() : renderLogin(); } }, LANG === 'es' ? 'CA' : 'ES'));
-    const pb = document.getElementById('prevbar'); if (pb) pb.remove();
-    if (ME && ME.preview) top.after(h('div', { id: 'prevbar', class: 'prevbar', role: 'status' }, h('span', null, t('prev_ro')), h('button', { class: 'sm', onclick: async () => { try { await api('POST', '/api/preview/exit'); await boot(); location.hash = '#/'; } catch (e) { fail(e); } } }, t('prev_exit'))));
-    if (ME) add(top, h('button', { class: 'tb', onclick: async () => { await api('POST', '/api/logout').catch(() => {}); ME = null; renderLogin(); } }, t('logout')));
+  /* Confirmación en un diálogo propio (sustituye a confirm()). Devuelve true/false. opts: { danger, yes, title } */
+  function confirmDlg(msg, opts) {
+    opts = opts || {};
+    return new Promise((resolve) => {
+      let done = false;
+      const yes = h('button', { class: opts.danger ? 'danger' : 'pri', type: 'button', onclick: () => finish(true) }, opts.yes || t('confirm_yes')), no = h('button', { type: 'button', onclick: () => finish(false) }, t('cancel'));
+      const dlg = h('dialog', { 'aria-label': opts.title || t('confirm_title'), role: 'alertdialog' }, h('div', { class: 'dh' }, opts.title || t('confirm_title')), h('div', { class: 'db' }, h('p', null, String(msg))), h('div', { class: 'df' }, no, yes));
+      function finish(v) { if (done) return; done = true; try { dlg.close(); } catch (_) {} dlg.remove(); resolve(v); }
+      dlg.addEventListener('cancel', (e) => { e.preventDefault(); finish(false); });
+      document.body.appendChild(dlg); dlg.showModal(); (opts.danger ? no : yes).focus();
+    });
   }
 
+  /* ---------- cabecera y navegación ---------- */
+  const NAV_ICON = { home: 'folder', students: 'users', catalog: 'book', grades: 'graduation', audit: 'shield-check', help: 'life-buoy' };
+  const THEME_ICON = { auto: 'settings', dark: 'moon', light: 'sun' };
+  function renderTop() {
+    clear(top); clear(navEl);
+    document.body.classList.remove('en-entrada');
+    add(top, h('a', { class: 'dc-brand', href: '#/', 'aria-label': t('app') + ' — ' + t('go_home') }, h('span', { class: 'dc-brand__tile' }, ico('heart-pulse')), h('span', { class: 'dc-brand__name' }, t('app'))));
+    const acts = h('div', { class: 'dc-header__actions' });
+    const btn = (icon, label, fn, extra) => h('button', { type: 'button', class: 'dc-btn dc-btn--ghost dc-btn--icon' + (extra ? ' ' + extra : ''), 'aria-label': label, title: label, onclick: fn }, icon);
+    if (ME) add(acts, h('span', { class: 'dc-header__who' }, ME.name));
+    const seg = location.hash.replace(/^#\/?/, '').split('/')[0];
+    const cur = seg === 'students' || seg === 'student' || seg === 'catalog' || seg === 'taxonomy' || seg === 'audit' || seg === 'grades' || seg === 'help' ? (seg === 'student' ? 'students' : seg === 'taxonomy' ? 'catalog' : seg) : 'home';
+    if (ME) add(acts, h('a', { class: 'dc-btn dc-btn--ghost dc-btn--icon', href: '#/help', 'aria-label': t('nav_help'), title: t('nav_help'), 'aria-current': cur === 'help' ? 'page' : null }, ico('life-buoy')));
+    const th = window.HCTheme ? window.HCTheme.get() : 'auto';
+    add(acts, btn(ico(THEME_ICON[th]), t('theme_change').replace('{m}', t('theme_' + th)), () => { window.HCTheme.next(); renderTop(); }));
+    add(acts, h('button', { type: 'button', class: 'dc-btn dc-btn--ghost dc-btn--icon hdr-lang', 'aria-label': t('lang_to') + ' (' + (LANG === 'es' ? 'català' : 'castellano') + ')', title: t('lang_to'), onclick: () => switchLang() }, LANG === 'es' ? 'CA' : 'ES'));
+    if (ME) add(acts, btn(ico('log-out'), t('logout'), async () => { await api('POST', '/api/logout').catch(() => {}); ME = null; renderLogin(); }));
+    add(top, acts);
+    const items = !ME ? [] : ME.staff ? [['home', '#/', 'nav_patients'], ['students', '#/students', 'nav_students'], ['catalog', '#/catalog', 'nav_catalog_s'], ['grades', '#/grades', 'nav_grades'], ['audit', '#/audit', 'nav_audit']] : [];
+    navEl.hidden = !items.length; shell.classList.toggle('sin-nav', !items.length);
+    items.forEach(([k, href, l]) => add(navEl, h('a', { class: 'dc-nav__item', href, 'aria-current': cur === k ? 'page' : null }, ico(NAV_ICON[k]), h('span', { class: 'dc-nav__label' }, t(l)))));
+    const pb = document.getElementById('prevbar'); if (pb) pb.remove();
+    if (ME && ME.preview) top.after(h('div', { id: 'prevbar', class: 'prevbar', role: 'status' }, h('span', null, t('prev_ro')), h('button', { class: 'sm', onclick: async () => { try { await api('POST', '/api/preview/exit'); await boot(); location.hash = '#/'; } catch (e) { fail(e); } } }, t('prev_exit'))));
+  }
+  function switchLang() { LANG = LANG === 'es' ? 'ca' : 'es'; document.documentElement.lang = LANG; if (ME) api('PUT', '/api/me', { lang: LANG }).catch(() => {}); renderTop(); ME ? route() : renderLogin(); }
+
+  /* ---------- pantalla de entrada ---------- */
+  /* Tres caminos, los de siempre: Campus (alumnado y profesorado), profesorado con correo y contraseña, administración con su contraseña
+     (correo vacío). Errores claros, intentos que quedan y cuenta atrás si hay bloqueo. */
+  function renderStatus(icon, title, text, retry) {
+    clearInterval(tickTimer); clearTimeout(loadTimer); document.body.classList.add('en-entrada'); clear(top); clear(navEl); navEl.hidden = true;
+    show(h('div', { class: 'dc-entrada' }, h('div', { class: 'dc-entrada__card en-card' }, h('div', { class: 'dc-state dc-state--error' }, h('span', { class: 'dc-state__icon' }, ico(icon)), h('h1', { class: 'dc-state__title', tabindex: '-1' }, title), h('p', { class: 'dc-muted' }, text), retry ? h('button', { class: 'dc-btn dc-btn--primary', type: 'button', onclick: retry }, t('retry')) : null))));
+  }
   function renderLogin() {
-    renderTop();
-    const pw = h('input', { type: 'password', autocomplete: 'current-password' }), em = h('input', { type: 'email', autocomplete: 'username', placeholder: t('login_email_ph') });
-    const f = h('form', { onsubmit: async (e) => { e.preventDefault(); try { if (em.value.trim()) await api('POST', '/api/teacher/login', { email: em.value, password: pw.value }); else await api('POST', '/api/admin/login', { password: pw.value }); await boot(); } catch (er) { toast(er.status === 429 ? t('too_many') : t('bad_pw'), true); } } },
-      field(t('login_email'), em), field(t('admin_pw'), pw), h('p', null, h('button', { class: 'pri', type: 'submit' }, t('enter'))));
-    show(h('div', { class: 'login' }, panel(t('login_title'), [h('p', null, t('login_campus')), h('p', null, h('a', { class: 'btn pri', href: 'https://campus.luisfs.com' }, t('login_btn')))]),
-      h('details', { class: 'panel' }, h('summary', null, t('admin_pw')), h('div', { class: 'pb' }, f))));
+    clearInterval(tickTimer); clearTimeout(loadTimer);
+    document.documentElement.classList.remove('nocopy'); clear(top); clear(navEl); navEl.hidden = true; document.body.classList.add('en-entrada');
+    const pbar = document.getElementById('prevbar'); if (pbar) pbar.remove();
+    const msg = h('div', { class: 'en-msg', id: 'en-msg' }), caps = h('p', { class: 'dc-entrada__caps dc-small', hidden: true }, t('en_caps'));
+    const pw = h('input', { class: 'dc-input', id: 'en-pw', type: 'password', autocomplete: 'current-password', 'aria-describedby': 'en-msg', enterkeyhint: 'go' });
+    const em = h('input', { class: 'dc-input', id: 'en-em', type: 'email', autocomplete: 'username', inputmode: 'email', autocapitalize: 'none', spellcheck: 'false', 'aria-describedby': 'en-em-h' });
+    const eye = h('button', { class: 'dc-input-group__btn', type: 'button', 'aria-label': t('en_show'), 'aria-pressed': 'false', onclick: () => { const on = pw.type === 'password'; pw.type = on ? 'text' : 'password'; eye.setAttribute('aria-pressed', String(on)); eye.setAttribute('aria-label', on ? t('en_hide') : t('en_show')); clear(eye); eye.appendChild(ico(on ? 'eye-off' : 'eye')); pw.focus(); } }, ico('eye'));
+    const go = h('button', { class: 'dc-btn dc-btn--primary dc-btn--lg dc-btn--block', type: 'submit' }, t('en_enter'));
+    const note = (cls, icon, text) => { clear(msg); add(msg, h('div', { class: 'dc-alert ' + cls, role: 'alert' }, ico(icon), h('span', null, text))); };
+    const clearErr = () => { pw.removeAttribute('aria-invalid'); em.removeAttribute('aria-invalid'); };
+    pw.addEventListener('keyup', (e) => { caps.hidden = !(e.getModifierState && e.getModifierState('CapsLock')); });
+    pw.addEventListener('blur', () => { caps.hidden = true; });
+    const lock = (secs) => {
+      let left = secs; go.disabled = true;
+      const draw = () => { const m = Math.floor(left / 60), s = left % 60; note('dc-alert--warn', 'clock', secs ? t('en_wait').replace('{t}', pad(m) + ':' + pad(s)) : t('en_wait_unk')); };
+      draw(); if (!secs) { setTimeout(() => { go.disabled = false; }, 15000); return; }
+      tickTimer = setInterval(() => { left--; if (left <= 0) { clearInterval(tickTimer); go.disabled = false; clear(msg); add(msg, h('div', { class: 'dc-alert dc-alert--ok', role: 'status' }, ico('check-circle'), h('span', null, t('en_wait_done')))); pw.focus(); } else draw(); }, 1000);
+    };
+    const f = h('form', { class: 'dc-form', novalidate: true, onsubmit: async (e) => {
+      e.preventDefault(); clearErr();
+      if (!pw.value) { note('dc-alert--danger', 'alert', t('en_pw_empty')); pw.setAttribute('aria-invalid', 'true'); pw.focus(); return; }
+      go.setAttribute('aria-busy', 'true'); go.disabled = true; clear(msg);
+      try { if (em.value.trim()) await api('POST', '/api/teacher/login', { email: em.value, password: pw.value }); else await api('POST', '/api/admin/login', { password: pw.value }); await boot(); }
+      catch (er) {
+        go.removeAttribute('aria-busy'); go.disabled = false;
+        if (er.status === 429) return lock((er.data && er.data.wait) || 0);
+        if (er.status === 401) { const n = er.data && typeof er.data.left === 'number' ? er.data.left : null; pw.setAttribute('aria-invalid', 'true'); if (em.value.trim()) em.setAttribute('aria-invalid', 'true'); note('dc-alert--danger', 'alert', t('en_bad') + (n === null ? '' : ' ' + (n === 1 ? t('en_left1') : n > 1 ? t('en_left').replace('{n}', n) : ''))); pw.select(); return; }
+        if (er.status === 503) return note('dc-alert--warn', 'info', t('en_off'));
+        note('dc-alert--danger', 'offline', er.status ? t('en_err') : t('en_net'));
+      }
+    } },
+      h('div', { class: 'dc-field' }, h('label', { class: 'dc-label', for: 'en-em' }, t('en_email')), em, h('p', { class: 'dc-hint', id: 'en-em-h' }, t('en_email_hint'))),
+      h('div', { class: 'dc-field' }, h('label', { class: 'dc-label', for: 'en-pw' }, t('en_pw')), h('div', { class: 'dc-input-group' }, pw, eye), caps), msg, go);
+    const lang = h('div', { class: 'en-lang' }, h('button', { type: 'button', class: 'dc-btn dc-btn--on-dark dc-btn--sm', 'aria-label': t('lang_to'), onclick: () => switchLang() }, LANG === 'es' ? 'Català' : 'Castellano'),
+      h('button', { type: 'button', class: 'dc-btn dc-btn--on-dark dc-btn--sm dc-btn--icon', 'aria-label': t('theme_change').replace('{m}', t('theme_' + (window.HCTheme ? window.HCTheme.get() : 'auto'))), onclick: () => { window.HCTheme.next(); renderLogin(); } }, ico(THEME_ICON[window.HCTheme ? window.HCTheme.get() : 'auto'])));
+    show(h('div', { class: 'dc-entrada' }, lang,
+      h('div', { class: 'dc-brand dc-brand--lg dc-entrada__brand' }, h('span', { class: 'dc-brand__tile' }, ico('heart-pulse')), h('div', { class: 'dc-entrada__names' }, h('h1', { class: 'dc-entrada__app' }, t('app')), h('p', { class: 'dc-entrada__sub' }, t('en_sub')))),
+      h('div', { class: 'dc-entrada__card en-card' },
+        h('h2', { class: 'dc-entrada__title', tabindex: '-1' }, t('login_title')), h('p', { class: 'dc-entrada__lead' }, t('en_campus_lead')),
+        h('a', { class: 'dc-btn dc-btn--primary dc-btn--lg dc-btn--block', href: 'https://campus.luisfs.com' }, ico('graduation'), t('en_campus_btn')),
+        h('details', null, h('summary', null, ico('lock'), t('en_staff')), h('div', { class: 'dc-stack' }, h('p', { class: 'dc-muted dc-small' }, t('en_staff_help')), f))),
+      h('p', { class: 'dc-entrada__foot' }, t('en_note'))));
   }
 
   /* ---------- banda de paciente y pestañas ---------- */
   function banner(p, right) {
     const d = p.data, al = d.alergias || [], age = ageOf(d.fecha_nacimiento);
-    const f = (l, v) => (v ? h('div', { class: 'bn-f' }, h('span', null, l), h('b', null, v)) : null);
+    const initials = ((d.nombre || '').trim()[0] || '') + ((d.apellidos || '').trim()[0] || '');
     const loc = [d.unidad, d.habitacion && 'H ' + d.habitacion, d.cama && 'C ' + d.cama].filter(Boolean).join(' / ');
-    const alEl = al.length ? h('span', { class: 'al' }, '⚠ ' + t('allergies') + ': ' + al.map((a) => a.agente + (a.reaccion ? ' (' + a.reaccion + ')' : '')).join('; '))
-      : d.sin_alergias ? h('span', { class: 'al none' }, t('allergies_none')) : h('span', { class: 'al unk' }, t('allergies_unk'));
+    const meta = [
+      age !== '' ? h('span', null, h('b', null, age), ' ' + t('age_years') + (d.sexo ? ' · ' + t('sex_' + d.sexo) : '')) : (d.sexo ? h('span', null, t('sex_' + d.sexo)) : null),
+      d.fecha_nacimiento ? h('span', null, t('b_dob') + ' ', h('b', null, fmtD(d.fecha_nacimiento))) : null,
+      h('span', null, 'NHC ', h('b', null, d.nhc || p.code)),
+      loc ? h('span', null, ico('map-pin'), h('b', null, loc)) : null,
+    ];
+    const alEl = al.length ? h('span', { class: 'al', role: 'note' }, ico('alert'), t('allergies') + ': ' + al.map((a) => a.agente + (a.reaccion ? ' (' + a.reaccion + ')' : '')).join('; '))
+      : d.sin_alergias ? h('span', { class: 'al none' }, ico('check-circle'), t('allergies_none')) : h('span', { class: 'al unk' }, ico('info'), t('allergies_unk'));
+    const ais = ((d.aislamiento && !/^(ninguno|ninguna|cap|no|-).?$/i.test(String(d.aislamiento).trim())) || (d.aislamiento_tipos || []).length) ? h('span', { class: 'chip ' + ((d.aislamiento_tipos || []).length ? 'red' : 'amb') }, ico('shield'), t('f_aislamiento') + ': ' + [(d.aislamiento_tipos || []).map((k) => t('ais_' + k)).join(' + '), d.aislamiento].filter(Boolean).join(' · ')) : null;
     return h('div', { class: 'banner' },
-      h('div', { class: 'b1' }, h('div', { class: 'bn-name' }, name(d)), f(t('f_age'), age !== '' ? age + ' ' + t('age_years') : ''), f(t('f_sexo'), d.sexo ? t('sex_' + d.sexo) : ''), f(t('b_dob'), fmtD(d.fecha_nacimiento)), f('NHC', d.nhc || p.code), f(t('b_loc'), loc)),
-      h('div', { class: 'b2' }, alEl, (d.aislamiento || (d.aislamiento_tipos || []).length) ? h('span', { class: 'chip ' + ((d.aislamiento_tipos || []).length ? 'red' : 'amb') }, t('f_aislamiento') + ': ' + [(d.aislamiento_tipos || []).map((k) => t('ais_' + k)).join(' + '), d.aislamiento].filter(Boolean).join(' · ')) : null, d.dieta ? h('span', { class: 'chip' }, t('f_dieta') + ': ' + d.dieta) : null, right ? h('span', { class: 'row' }, right) : null));
+      h('div', { class: 'b1' }, h('div', { class: 'bn-avatar', 'aria-hidden': 'true' }, initials.toUpperCase() || '?'), h('div', { class: 'bn-id' }, h('div', { class: 'bn-name' }, name(d)), h('div', { class: 'bn-meta' }, meta))),
+      h('div', { class: 'b2' }, alEl, ais, d.dieta ? h('span', { class: 'chip' }, t('f_dieta') + ': ' + d.dieta) : null, right ? h('span', { class: 'row right' }, right) : null));
   }
-  const tabBar = (tabs, cur, base) => h('div', { class: 'tabs', role: 'tablist' }, tabs.map(([k, label, n]) => h('button', { role: 'tab', 'aria-selected': k === cur ? 'true' : 'false', class: k === cur ? 'on' : '', onclick: () => { location.hash = base + '/' + k; } }, label, n ? h('span', { class: 'cnt' }, n) : null)));
+  const TAB_ICON = { resumen: 'home', evolucion: 'edit', constantes: 'thermometer', balance: 'droplet', cuidados: 'heart-pulse', mar: 'pill', escalas: 'gauge', valoracion: 'clipboard', plan: 'clipboard', pruebas: 'flask', informe: 'file', eval: 'check-circle', ficha: 'user', consignas: 'flag', seguimiento: 'activity', asignar: 'users', prescripciones: 'pill', linea: 'clock', historias: 'folder', actividad: 'activity' };
+  const tabBar = (tabs, cur, base) => h('div', { class: 'tabs', role: 'tablist', 'aria-label': t('menu_main') }, tabs.map(([k, label, n]) => h('button', { role: 'tab', 'aria-selected': k === cur ? 'true' : 'false', class: k === cur ? 'on' : '', onclick: () => { location.hash = base + '/' + k; } }, TAB_ICON[k] ? ico(TAB_ICON[k]) : null, label, n ? h('span', { class: 'cnt', 'aria-label': String(n) }, n) : null)));
 
   /* ---------- ficha del paciente ---------- */
   const SECTIONS = [
@@ -158,7 +278,7 @@
     const alList = h('div'); let alRows = [];
     const addAl = (a) => {
       const r = { agente: h('input', { type: 'text', value: a.agente || '', placeholder: t('allergy_agent') }), reaccion: h('input', { type: 'text', value: a.reaccion || '', placeholder: t('allergy_reaction') }), gravedad: h('select', null, ['', 'leve', 'moderada', 'grave'].map((v) => h('option', { value: v, selected: a.gravedad === v }, v ? t('sev_' + v) : t('allergy_sev')))) };
-      const row = h('div', { class: 'row' }, r.agente, r.reaccion, r.gravedad, h('button', { type: 'button', class: 'danger sm', onclick: () => { alRows = alRows.filter((x) => x !== r); row.remove(); } }, '✕'));
+      const row = h('div', { class: 'row' }, r.agente, r.reaccion, r.gravedad, h('button', { type: 'button', class: 'danger sm', onclick: () => { alRows = alRows.filter((x) => x !== r); row.remove(); }, 'aria-label': t('delete'), title: t('delete') }, ico('x')));
       alRows.push(r); alList.appendChild(row);
     };
     (d.alergias || []).forEach(addAl);
@@ -193,16 +313,16 @@
     tab = tab || 'ficha';
     const [{ patient, charts, revisions }, uj, act] = await Promise.all([api('GET', '/api/patients/' + id), api('GET', '/api/users'), api('GET', '/api/patients/' + id + '/activity')]);
     const base = '#/patient/' + id;
-    const actions = [h('button', { onclick: () => { location.hash = base + '/edit'; } }, t('edit')), h('button', { class: 'danger', onclick: async () => { if (patient.archived || confirm(t('confirm_archive'))) { await api('PUT', '/api/patients/' + id, { archived: !patient.archived }); viewPatient(id, tab); } } }, patient.archived ? t('restore') : t('archive'))];
+    const actions = [h('button', { onclick: () => { location.hash = base + '/edit'; } }, t('edit')), h('button', { class: 'danger', onclick: async () => { if (patient.archived || await confirmDlg(t('confirm_archive'), { yes: t('archive') })) { await api('PUT', '/api/patients/' + id, { archived: !patient.archived }); viewPatient(id, tab); } } }, patient.archived ? t('restore') : t('archive'))];
     let body;
     if (tab === 'ficha') body = [window.HCX.casePdfBar(id), await window.HCX.classifyPanel(patient, () => viewPatient(id, tab)), revisions ? h('p', { class: 'mut' }, revisions + ' ' + t('revisions')) : null, fichaPanels(patient, true), await window.HCX.deletePatientPanel(patient)];
     else if (tab === 'asignar') body = assignPanel(id, charts, uj, (await api('GET', '/api/patients/' + id + '/consignas')).consignas);
     else if (tab === 'historias') body = panel(null, charts.length ? h('div', null, (() => {
       /* mismas fechas para todas las historias de este paciente (lo normal: todos los grupos a la vez); un campo vacío no se toca */
-      const o = h('input', { type: 'date', 'aria-label': t('win_from'), style: 'width:150px' }), c2 = h('input', { type: 'date', 'aria-label': t('win_to'), style: 'width:150px' });
-      return h('div', { class: 'row', style: 'padding:10px 12px;flex-wrap:wrap;gap:8px;border-bottom:1px solid var(--line)' }, h('b', null, t('win_all')), o, '→', c2, h('button', { class: 'sm', onclick: async () => { if (!o.value && !c2.value) return toast(t('win_none'), true); try { await Promise.all(charts.map((ch) => api('PUT', '/api/charts/' + ch.id, Object.assign({}, o.value ? { opens: o.value } : {}, c2.value ? { closes: c2.value } : {})))); toast(t('win_done')); } catch (e) { fail(e); } viewPatient(id, tab); } }, t('win_apply')), h('span', { class: 'mut' }, t('win_all_help')));
+      const o = h('input', { type: 'date', 'aria-label': t('win_from') }), c2 = h('input', { type: 'date', 'aria-label': t('win_to') });
+      return h('div', { class: 'row win-bar' }, h('b', null, t('win_all')), o, '→', c2, h('button', { class: 'sm', onclick: async () => { if (!o.value && !c2.value) return toast(t('win_none'), true); try { await Promise.all(charts.map((ch) => api('PUT', '/api/charts/' + ch.id, Object.assign({}, o.value ? { opens: o.value } : {}, c2.value ? { closes: c2.value } : {})))); toast(t('win_done')); } catch (e) { fail(e); } viewPatient(id, tab); } }, t('win_apply')), h('span', { class: 'mut' }, t('win_all_help')));
     })(), h('div', { class: 'tw' }, h('table', { class: 'grid' }, h('thead', null, h('tr', null, [t('col_chart'), t('col_type'), t('col_members'), t('col_records'), t('col_last'), t('col_window'), t('col_state'), ''].map((x, i) => h('th', { class: i === 3 ? 'r' : '' }, x)))),
-      h('tbody', null, charts.map((c) => h('tr', null, h('td', null, h('a', { href: '#/chart/' + c.id }, c.name), c.brief ? h('div', { class: 'sub' }, c.brief.title + (c.brief.total ? ' · ' + c.brief.done + '/' + c.brief.total : '')) : null), h('td', null, h('span', { class: 'chip' }, c.kind === 'team' ? t('team') : t('individual'))), h('td', null, c.members.map((m) => m.name).join(', ')), h('td', { class: 'r' }, c.recs), h('td', null, c.last ? fmtISO(c.last) : '—'), h('td', null, h('div', { class: 'row', style: 'flex-wrap:nowrap;gap:4px' }, ['opens', 'closes'].map((k, i) => [i ? '→' : null, h('input', { type: 'date', value: c[k] || '', title: i ? t('win_to') : t('win_from'), 'aria-label': i ? t('win_to') : t('win_from'), style: 'width:140px', onchange: async (e) => { try { await api('PUT', '/api/charts/' + c.id, { [k]: e.target.value }); viewPatient(id, tab); } catch (x) { e.target.value = c[k] || ''; fail(x); } } })]).flat().filter(Boolean))), h('td', null, stateChip(c.status === 'open'),   (c.opens && c.opens > new Date().toLocaleDateString('sv-SE')) ? h('span', { class: 'chip', style: 'margin-left:4px' }, t('win_sched')) : (c.closes && c.closes < new Date().toLocaleDateString('sv-SE')) ? h('span', { class: 'chip amb', style: 'margin-left:4px' }, t('win_ended')) : null),
+      h('tbody', null, charts.map((c) => h('tr', null, h('td', null, h('a', { href: '#/chart/' + c.id }, c.name), c.brief ? h('div', { class: 'sub' }, c.brief.title + (c.brief.total ? ' · ' + c.brief.done + '/' + c.brief.total : '')) : null), h('td', null, h('span', { class: 'chip' }, c.kind === 'team' ? t('team') : t('individual'))), h('td', null, c.members.map((m) => m.name).join(', ')), h('td', { class: 'r' }, c.recs), h('td', null, c.last ? fmtISO(c.last) : '—'), h('td', null, h('div', { class: 'row' }, ['opens', 'closes'].map((k, i) => [i ? '→' : null, h('input', { type: 'date', value: c[k] || '', title: i ? t('win_to') : t('win_from'), 'aria-label': i ? t('win_to') : t('win_from'), onchange: async (e) => { try { await api('PUT', '/api/charts/' + c.id, { [k]: e.target.value }); viewPatient(id, tab); } catch (x) { e.target.value = c[k] || ''; fail(x); } } })]).flat().filter(Boolean))), h('td', null, stateChip(c.status === 'open'),   (c.opens && c.opens > new Date().toLocaleDateString('sv-SE')) ? h('span', { class: 'chip' }, t('win_sched')) : (c.closes && c.closes < new Date().toLocaleDateString('sv-SE')) ? h('span', { class: 'chip amb' }, t('win_ended')) : null),
         h('td', null, h('div', { class: 'row' }, h('button', { class: 'sm', onclick: () => { location.hash = '#/chart/' + c.id; } }, t('open_it')), h('button', { class: 'sm', onclick: async () => { try { await api('PUT', '/api/charts/' + c.id, { status: c.status === 'open' ? 'closed' : 'open' }); viewPatient(id, tab); } catch (e) { fail(e); } } }, c.status === 'open' ? t('close_chart') : t('open_chart')),
           !c.recs ? h('button', { class: 'sm danger', onclick: async () => { try { await api('DELETE', '/api/charts/' + c.id); viewPatient(id, tab); } catch (e) { fail(e); } } }, t('delete')) : null)))))))) : empty(t('no_data')), { flush: true });
     else if (tab === 'prescripciones' || tab === 'linea' || tab === 'consignas' || tab === 'seguimiento') body = await window.HCX.patientTab(tab, { id, refresh: () => viewPatient(id, tab) });
@@ -231,7 +351,7 @@
     };
     const drawList = () => {
       clear(list); const v = visible();
-      v.forEach((u) => list.appendChild(h('label', null, h('input', { type: 'checkbox', checked: picked.has(u.id), onchange: (e) => { e.target.checked ? picked.add(u.id) : picked.delete(u.id); refreshInfo(); } }), u.name, h('span', { class: 'chip' }, t('p_' + u.profile)), tagsOf(u).map((x) => h('span', { class: 'chip' }, x)), assignedIds.has(u.id) ? h('span', { class: 'chip grn', title: t('already_has'), 'aria-label': t('already_has') }, '✓') : null)));
+      v.forEach((u) => list.appendChild(h('label', null, h('input', { type: 'checkbox', checked: picked.has(u.id), onchange: (e) => { e.target.checked ? picked.add(u.id) : picked.delete(u.id); refreshInfo(); } }), u.name, h('span', { class: 'chip' }, t('p_' + u.profile)), tagsOf(u).map((x) => h('span', { class: 'chip' }, x)), assignedIds.has(u.id) ? h('span', { class: 'chip grn', title: t('already_has') }, ico('check'), t('assigned_short')) : null)));
       if (!v.length) list.appendChild(h('div', { class: 'empty' }, t('no_students')));
       refreshInfo();
     };
@@ -255,7 +375,7 @@
     const search = h('input', { type: 'search', placeholder: t('search'), oninput: (e) => { q = e.target.value.toLowerCase(); drawList(); } });
     fillFilters(); drawList();
     return panel(t('assign'), [h('div', { class: 'cols' }, field(t('assign_mode'), modeSel), field(t('cs_assign'), consSel), field(t('win_from'), winFrom), field(t('win_to'), winTo), field(t('pace_title'), paceSel), field(t('pace_cap'), capIn), teamByField, teamField, field(t('subject'), sjSel), gSel.f, sSel.f, hSel.f, field(t('search'), search)),
-      h('div', { class: 'row' }, h('button', { onclick: () => { visible().forEach((u) => picked.add(u.id)); drawList(); } }, t('select_all')), h('button', { onclick: () => { picked.clear(); drawList(); } }, '✕'), cnt), preview, h('div', null, list),
+      h('div', { class: 'row' }, h('button', { onclick: () => { visible().forEach((u) => picked.add(u.id)); drawList(); } }, t('select_all')), h('button', { onclick: () => { picked.clear(); drawList(); }, 'aria-label': t('cl_clear'), title: t('cl_clear') }, ico('x')), cnt), preview, h('div', null, list),
       h('p', { class: 'row' }, h('button', { class: 'pri', onclick: async (ev) => { const btn = ev.currentTarget; if (btn.disabled) return; try {
         if (!picked.size) return toast(t('pick_some'), true);
         if (mode === 'team' && teamBy === 'sub' && !sj) return toast(t('team_need_subj'), true);
@@ -394,7 +514,7 @@
     let body;
     if (tab === 'resumen') {
       const d = c.patient.data, lastV = live('constantes')[0], lastN = live('nota')[0];
-      const vit = lastV ? h('div', null, h('div', { class: 'sub' }, fmtDT(lastV.occurred) + ' · ' + lastV.author), h('table', { class: 'grid' }, h('tbody', null, PARAMS.filter((p) => p[3](lastV.data) != null).map((p) => h('tr', null, h('td', null, plain(p[1])), h('td', { class: p[4](lastV.data) ? 'r ' : 'r' }, h('b', null, p[3](lastV.data) + (p[2] ? ' ' + p[2] : '')), p[4](lastV.data) === 'hi' ? ' ▲' : p[4](lastV.data) === 'lo' ? ' ▼' : '')))))) : empty(t('no_data'));
+      const vit = lastV ? h('div', null, h('div', { class: 'sub' }, fmtDT(lastV.occurred) + ' · ' + lastV.author), h('dl', { class: 'vt-grid' }, PARAMS.filter((p) => p[3](lastV.data) != null).map((p) => { const fl = p[4](lastV.data); return h('div', { class: 'vt' + (fl ? ' ' + fl : '') }, h('dt', null, plain(p[1])), h('dd', null, String(p[3](lastV.data)), p[2] ? h('small', null, ' ' + p[2]) : null, fl ? [' ', flagIco(fl)] : null)); }))) : empty(t('no_data'));
       body = h('div', { class: 'split' }, h('div', null, panel(t('p_admission'), dl(d, ['fecha_ingreso', 'procedencia', 'motivo_ingreso', 'enfermedad_actual', 'diagnostico_medico', 'riesgos', 'autonomia']))),
         h('div', null, panel(t('p_last_vitals'), vit), panel(t('p_last_note'), lastN ? h('div', null, h('div', { class: 'sub' }, fmtDT(lastN.occurred) + ' · ' + lastN.author), h('div', { class: 'body' }, lastN.data.texto)) : empty(t('no_data')))));
     } else if (tab === 'evolucion') {
@@ -406,10 +526,10 @@
       else {
         const graphs = window.HCX.vitalCharts(cols);
         const head = h('tr', null, h('th', { class: 'lbl' }, t('fl_param')), cols.map((r) => h('th', { title: r.occurred.replace('T', ' ') + ' · ' + r.author }, fmtDT(r.occurred), h('div', { class: 'by' }, r.author.split(' ')[0]), r.void_at ? h('div', { class: 'by' }, t('fl_voided')) : null)));
-        const trs = rowsP.map((p) => h('tr', null, h('td', { class: 'lbl' }, plain(p[1]), p[2] ? h('span', { class: 'u' }, p[2]) : null), cols.map((r) => { const v = p[3](r.data), fl = v == null ? '' : p[4](r.data); return h('td', { class: (r.void_at ? 'void ' : '') + (!r.void_at && fl ? fl : '') }, v == null ? '' : String(v), !r.void_at && fl === 'hi' ? ' ▲' : !r.void_at && fl === 'lo' ? ' ▼' : ''); })));
+        const trs = rowsP.map((p) => h('tr', null, h('td', { class: 'lbl' }, plain(p[1]), p[2] ? h('span', { class: 'u' }, p[2]) : null), cols.map((r) => { const v = p[3](r.data), fl = v == null ? '' : p[4](r.data); return h('td', { class: (r.void_at ? 'void ' : '') + (!r.void_at && fl ? fl : '') }, v == null ? '' : String(v), !r.void_at && fl ? flagIco(fl) : null); })));
         trs.push(h('tr', null, h('td', { class: 'lbl' }, t('obs')), cols.map((r) => h('td', { class: r.void_at ? 'void' : '' }, r.data.obs || ''))));
         if (cols.some((r) => (r.comments || []).length)) trs.push(h('tr', null, h('td', { class: 'lbl' }, t('comments')), cols.map((r) => h('td', null, (r.comments || []).map((cm) => cm.text).join(' / ')))));
-        trs.push(h('tr', null, h('td', { class: 'lbl' }, ''), cols.map((r) => h('td', null, actions(r)))));
+        trs.push(h('tr', { class: 'flow-act' }, h('td', { class: 'lbl' }, ''), cols.map((r) => h('td', null, actions(r)))));
         body = [h('div', { class: 'panel' }, h('div', { class: 'pb flush flow tw' }, h('table', null, h('thead', null, head), h('tbody', null, trs))), h('div', { class: 'legend' }, t('fl_legend'))), h('h2', { class: 'sec-h' }, t('ch_vitals')), graphs];
       }
     } else if (tab === 'balance') {
@@ -420,7 +540,7 @@
         panel(null, tbl([t('col_time'), t('col_type'), t('ml'), t('col_author'), t('col_detail'), ''], bs.map((r) => h('tr', { class: r.void_at ? 'void' : '' }, timeCell(r), h('td', null, h('span', { class: 'vv' }, t(r.data.dir) + ' · ' + t('v_' + r.data.via))), h('td', null, h('span', { class: 'vv' }, r.data.ml + ' ml')), who(r), h('td', null, r.data.obs || '', voidInfo(r), cmts(r)), h('td', null, actions(r))))), { flush: true })];
     } else if (tab === 'cuidados') {
       const cs = byType('cuidado');
-      body = panel(null, tbl([t('col_time'), t('care'), t('col_result'), t('col_detail'), t('col_author'), ''], cs.map((r) => h('tr', { class: r.void_at ? 'void' : '' }, timeCell(r), h('td', null, h('span', { class: 'vv' }, LANG === 'ca' ? r.data.nombre_ca : r.data.nombre_es)), h('td', null, h('span', { class: 'chip ' + (r.data.resultado === 'realizado' ? 'grn' : 'amb') }, t('res_' + r.data.resultado))), h('td', null, r.data.obs || '', voidInfo(r), cmts(r)), who(r), h('td', null, actions(r))))), { flush: true });
+      body = panel(null, tbl([t('col_time'), t('care'), t('col_result'), t('col_detail'), t('col_author'), ''], cs.map((r) => h('tr', { class: r.void_at ? 'void' : '' }, timeCell(r), h('td', null, h('span', { class: 'vv' }, LANG === 'ca' ? r.data.nombre_ca : r.data.nombre_es)), h('td', null, resChip(r.data.resultado)), h('td', null, r.data.obs || '', voidInfo(r), cmts(r)), who(r), h('td', null, actions(r))))), { flush: true });
     } else if (window.HCX.chartTab(tab, X)) body = window.HCX.chartTab(tab, X);
     else body = [h('p', { class: 'mut' }, t('readonly_note')), fichaPanels(c.patient, staff)];
 
@@ -434,21 +554,35 @@
 
   async function viewMine() {
     const { charts } = await api('GET', '/api/my/charts');
-    const rows = charts.map((c) => { const age = ageOf(c.nacimiento); return h('tr', { class: c.window === 'scheduled' ? 'locked' : 'clk', onclick: () => { if (c.window !== 'scheduled') location.hash = '#/chart/' + c.id; } },
-      h('td', null, c.window === 'scheduled' ? (c.patient.trim() || t('sched_name')) : h('a', { href: '#/chart/' + c.id, onclick: (e) => e.stopPropagation() }, c.patient.trim()), c.alergias.length ? h('div', null, h('span', { class: 'al' }, '⚠ ' + c.alergias.join(', '))) : null, c.consigna ? h('div', { class: 'sub' }, t('cs_title') + ': ' + c.consigna.title + (c.consigna.total ? ' · ' + c.consigna.done + '/' + c.consigna.total : '')) : null),
-      h('td', null, (age !== '' ? age + ' ' + t('age_years') : '') + (c.sexo ? ' / ' + t('sex_' + c.sexo) : '')), h('td', null, [c.unidad, c.habitacion && 'H ' + c.habitacion, c.cama && 'C ' + c.cama].filter(Boolean).join(' / ')), h('td', null, c.diagnostico),
-      h('td', null, h('span', { class: 'chip' }, c.kind === 'team' ? t('team') + ': ' + c.name : t('individual'))), h('td', { class: 'r' }, c.mine), h('td', null, c.window === 'scheduled' ? h('span', { class: 'chip' }, t('win_from_on').replace('{d}', fmtD(c.opens))) : c.window === 'ended' ? h('span', { class: 'chip amb' }, t('win_ended_on').replace('{d}', fmtD(c.closes))) : stateChip(c.status === 'open'), c.closes && !c.window ? h('div', { class: 'sub' }, t('win_until').replace('{d}', fmtD(c.closes))) : null, c.pace === 'student' ? h('div', { class: 'sub' }, t('dy_title').replace('{n}', c.day).replace('{m}', c.cap)) : null)); });
+    const card = (c) => {
+      const age = ageOf(c.nacimiento), locked = c.window === 'scheduled', open = c.status === 'open' && !c.window;
+      const loc = [c.unidad, c.habitacion && 'H ' + c.habitacion, c.cama && 'C ' + c.cama].filter(Boolean).join(' / ');
+      const k = c.consigna, pct = k && k.total ? Math.round((k.done / k.total) * 100) : 0;
+      const stateEl = locked ? h('span', { class: 'chip' }, ico('calendar'), t('win_from_on').replace('{d}', fmtD(c.opens))) : c.window === 'ended' ? h('span', { class: 'chip amb' }, ico('clock'), t('win_ended_on').replace('{d}', fmtD(c.closes))) : stateChip(open);
+      const body = [
+        h('div', { class: 'pt-top' }, h('div', { class: 'pt-name' }, locked ? (c.patient.trim() || t('sched_name')) : c.patient.trim()), stateEl),
+        h('div', { class: 'pt-meta' }, (age !== '' || c.sexo) ? h('span', null, (age !== '' ? age + ' ' + t('age_years') : '') + (c.sexo ? (age !== '' ? ' · ' : '') + t('sex_' + c.sexo) : '')) : null, loc ? h('span', null, ico('map-pin'), ' ' + loc) : null),
+        c.alergias.length ? h('div', null, h('span', { class: 'al', role: 'note' }, ico('alert'), t('allergies_short') + ': ' + c.alergias.join(', '))) : null,
+        c.diagnostico ? h('div', { class: 'pt-dx' }, c.diagnostico) : null,
+        k ? h('div', { class: 'pt-prog' }, h('span', null, h('b', null, t('cs_title') + ': '), k.title + (k.total ? ' · ' + k.done + '/' + k.total : '')), k.total ? meter(pct, pct >= 100 ? 'ok' : '') : null) : null,
+        h('div', { class: 'pt-foot' }, h('span', { class: 'row' }, h('span', { class: 'chip gry' }, c.kind === 'team' ? t('team') + ': ' + c.name : t('individual')), h('span', null, t('mine_n').replace('{n}', c.mine))), locked ? null : h('span', { class: 'pt-open' }, t('open_chart'), ico('arrow-right'))),
+        c.pace === 'student' ? h('div', { class: 'sub' }, t('dy_title').replace('{n}', c.day).replace('{m}', c.cap)) : null,
+        c.closes && !c.window ? h('div', { class: 'sub' }, t('win_until').replace('{d}', fmtD(c.closes))) : null,
+      ];
+      return locked ? h('div', { class: 'pt-card locked' }, body) : h('a', { class: 'pt-card', href: '#/chart/' + c.id }, body);
+    };
     show(h('div', { class: 'pg-title' }, h('h1', null, t('nav_mine'))), h('p', { class: 'mut' }, t('mine_intro')),
-      charts.length ? panel(null, h('div', { class: 'tw' }, h('table', { class: 'grid' }, h('thead', null, h('tr', null, [t('col_patient'), t('col_age'), t('col_loc'), t('col_dx'), t('col_chart'), t('col_mine'), t('col_state')].map((x, i) => h('th', { class: i === 5 ? 'r' : '' }, x)))), h('tbody', null, rows))), { flush: true }) : panel(null, empty(t('mine_empty'))));
+      charts.length ? h('div', { class: 'pt-grid' }, charts.map(card)) : panel(null, empty(t('mine_empty'), 'folder')));
   }
 
-  window.HC = { ageOf, name, stateChip, role: () => (ME && ME.role) || '', campus: () => (ME && ME.campus) || '', h, add, clear, api, toast, fail, panel, empty, field, fmtD, fmtDT, fmtISO, nowInput, show, t, plain, recSummary, lang: () => LANG };
+  window.HC = { ico, confirm: confirmDlg, resChip, flagIco, meter, ageOf, name, stateChip, role: () => (ME && ME.role) || '', campus: () => (ME && ME.campus) || '', h, add, clear, api, toast, fail, panel, empty, field, fmtD, fmtDT, fmtISO, nowInput, show, t, plain, recSummary, lang: () => LANG };
 
   /* ---------- router ---------- */
   async function route() {
     if (!ME) return;
     renderTop();
     const [a, b, c] = location.hash.replace(/^#\/?/, '').split('/');
+    clearTimeout(loadTimer); loadTimer = setTimeout(showLoading, 300);
     try {
       if (a === 'help') return window.HCX.viewHelp(ME.staff && b !== 'student' ? 'teacher' : 'student');
       if (a === 'go' && c) {
@@ -470,12 +604,12 @@
       if (a === 'grades') return await window.HCX.viewGrades();
       if (a === 'import') return await window.HCX.viewImport();
       return await viewPatients();
-    } catch (e) { fail(e); if (e.status === 404) location.hash = '#/'; }
+    } catch (e) { clearTimeout(loadTimer); main.removeAttribute('aria-busy'); fail(e); if (e.status === 404) location.hash = '#/'; else if (!e.status && e.message !== 'auth' && main.querySelector('.dc-spinner')) renderStatus('offline', t('off_title'), t('off_text'), () => { renderTop(); route(); }); }
   }
   async function boot() {
-    try { ME = await api('GET', '/api/me'); LANG = ME.lang || LANG; document.documentElement.lang = LANG; document.documentElement.classList.toggle('nocopy', !ME.staff); route(); } catch (_) { document.documentElement.classList.remove('nocopy'); renderLogin(); }
+    try { ME = await api('GET', '/api/me'); LANG = ME.lang || LANG; document.documentElement.lang = LANG; document.documentElement.classList.toggle('nocopy', !ME.staff); route(); } catch (e) { document.documentElement.classList.remove('nocopy'); if (!e.status && e.message !== 'auth') renderStatus('offline', t('off_title'), t('off_text'), boot); else if (e.message !== 'auth') renderStatus('alert', t('off_title'), t('en_err'), boot); else renderLogin(); }
   }
-  document.querySelector('.skip').addEventListener('click', (e) => { e.preventDefault(); main.focus(); });
+  document.querySelector('.dc-skip').addEventListener('click', (e) => { e.preventDefault(); main.focus(); });
   window.addEventListener('hashchange', route);
   window.addEventListener('DOMContentLoaded', boot);
 })();

@@ -24,7 +24,7 @@
     ev_add: 'Añadir', ev_hint: 'El alumnado solo ve lo que ya toca según el día del caso de cada historia.',
     pr_title: 'Prescripciones médicas', pr_add: 'Nueva prescripción', pr_drug: 'Medicamento', pr_dose: 'Dosis', pr_route: 'Vía', pr_freq: 'Frecuencia (texto)', pr_times: 'Horas (HH:MM separadas por comas)', pr_prn: 'Si precisa (sin horas fijas)', pr_start: 'Desde el día', pr_end: 'Hasta el día', pr_notes: 'Notas',
     pr_off: 'Suspender', pr_on: 'Reactivar', pr_suspended: 'Suspendida', pr_help: 'Las prescripciones las define el profesorado. El alumnado ve las que ya toca según el día del caso y registra las administraciones. El perfil TCAE solo puede registrar vía oral y tópica.', pr_has: 'Tiene administraciones registradas: suspéndela en lugar de borrarla.',
-    ch_vitals: 'Gráficas de constantes', ch_none: 'Hacen falta al menos dos registros para dibujar la gráfica.', ch_band: 'Franja gris: rango orientativo de adulto.', ba_shifts: 'Balance por turnos', ba_M: 'Mañana (7–15 h)', ba_T: 'Tarde (15–23 h)', ba_N: 'Noche (23–7 h)', ba_24: '24 h', ba_in: 'E', ba_out: 'S',
+    ch_vitals: 'Gráficas de constantes', ch_none: 'Hacen falta al menos dos registros para dibujar la gráfica.', ch_band: 'Franja verde (línea discontinua): rango orientativo de adulto. Los puntos rojos están fuera de rango.', ch_table: 'Ver los datos en tabla', ch_last: 'Último', ch_in: 'En rango', ch_out: 'Fuera de rango', ch_when: 'Fecha y hora', ba_shifts: 'Balance por turnos', ba_M: 'Mañana (7–15 h)', ba_T: 'Tarde (15–23 h)', ba_N: 'Noche (23–7 h)', ba_24: '24 h', ba_in: 'E', ba_out: 'S',
     gr_title: 'Notas del alumnado', gr_rubric: 'Rúbrica de evaluación', gr_rubric_help: 'Cada criterio se puntúa de 0 a 4. La nota (0–10) es la media ponderada por el peso de cada criterio.', gr_crit_es: 'Criterio (castellano)', gr_crit_ca: 'Criterio (catalán)', gr_w: 'Peso', gr_add: 'Añadir criterio', gr_csv: 'Exportar notas (CSV)', gr_send: 'Enviar al Campus', gr_send_h: 'Enviar notas publicadas al Campus', gr_send_help: 'Crea (o actualiza) una prueba por actividad en la asignatura elegida: todas las historias con la misma consigna forman una sola prueba, con la nota de cada alumno que la tenga publicada. En el Campus la prueba queda oculta hasta que la publiques. Si ya has editado una nota a mano en el Campus, no se sobrescribe.', gr_subject: 'Asignatura', gr_cat: 'Categoría', gr_teoria: 'Teoría', gr_practica: 'Prácticas', gr_seguimiento: 'Seguimiento', gr_ra: 'Unidad (UD/RA)', gr_nora: 'Sin unidad', gr_weight: 'Peso', gr_ptitle: 'Título de la prueba', gr_sent: 'Enviado: {n} notas', gr_kept: '{n} conservadas porque se editaron a mano en el Campus', gr_miss: 'No encontrados o sin matrícula en esa asignatura: {n}', gr_nosync: 'Sincroniza el alumnado desde Usuarios para cargar las asignaturas del Campus.', gr_pubn: '{n} publicadas', gr_pub1: '1 publicada', gr_empty: 'Todavía no hay notas. Se ponen en la pestaña «Evaluación» de cada historia.',
     gr_student: 'Alumno/a', gr_case: 'Caso', gr_mark: 'Nota', gr_pub: 'Publicada', gr_publish: 'Publicar la nota al alumno', gr_comment: 'Comentario de evaluación', gr_saved: 'Nota guardada', gr_none: 'Todavía no hay nota publicada.', gr_open: 'Abrir',
     lv0: '0 · No evidenciado', lv1: '1 · Insuficiente', lv2: '2 · Suficiente', lv3: '3 · Notable', lv4: '4 · Excelente', yes: 'Sí', no: 'No',
@@ -53,7 +53,7 @@
     ev_add: 'Afegir', ev_hint: "L'alumnat només veu el que ja toca segons el dia del cas de cada història.",
     pr_title: 'Prescripcions mèdiques', pr_add: 'Nova prescripció', pr_drug: 'Medicament', pr_dose: 'Dosi', pr_route: 'Via', pr_freq: 'Freqüència (text)', pr_times: 'Hores (HH:MM separades per comes)', pr_prn: 'Si cal (sense hores fixes)', pr_start: 'Des del dia', pr_end: 'Fins al dia', pr_notes: 'Notes',
     pr_off: 'Suspendre', pr_on: 'Reactivar', pr_suspended: 'Suspesa', pr_help: "Les prescripcions les defineix el professorat. L'alumnat veu les que ja toca segons el dia del cas i registra les administracions. El perfil TCAE només pot registrar via oral i tòpica.", pr_has: 'Té administracions registrades: suspèn-la en lloc d\'esborrar-la.',
-    ch_vitals: 'Gràfiques de constants', ch_none: 'Calen almenys dos registres per dibuixar la gràfica.', ch_band: "Franja grisa: rang orientatiu d'adult.", ba_shifts: 'Balanç per torns', ba_M: 'Matí (7–15 h)', ba_T: 'Tarda (15–23 h)', ba_N: 'Nit (23–7 h)', ba_24: '24 h', ba_in: 'E', ba_out: 'S',
+    ch_vitals: 'Gràfiques de constants', ch_none: 'Calen almenys dos registres per dibuixar la gràfica.', ch_band: "Franja verda (línia discontínua): rang orientatiu d'adult. Els punts vermells són fora de rang.", ch_table: 'Veure les dades en taula', ch_last: 'Últim', ch_in: 'En rang', ch_out: 'Fora de rang', ch_when: 'Data i hora', ba_shifts: 'Balanç per torns', ba_M: 'Matí (7–15 h)', ba_T: 'Tarda (15–23 h)', ba_N: 'Nit (23–7 h)', ba_24: '24 h', ba_in: 'E', ba_out: 'S',
     gr_title: "Notes de l'alumnat", gr_rubric: "Rúbrica d'avaluació", gr_rubric_help: "Cada criteri es puntua de 0 a 4. La nota (0–10) és la mitjana ponderada pel pes de cada criteri.", gr_crit_es: 'Criteri (castellà)', gr_crit_ca: 'Criteri (català)', gr_w: 'Pes', gr_add: 'Afegir criteri', gr_csv: 'Exportar notes (CSV)', gr_send: 'Enviar al Campus', gr_send_h: 'Enviar notes publicades al Campus', gr_send_help: "Crea (o actualitza) una prova per activitat a l'assignatura triada: totes les històries amb la mateixa consigna formen una sola prova, amb la nota de cada alumne que la tingui publicada. Al Campus la prova queda oculta fins que la publiquis. Si ja has editat una nota a mà al Campus, no se sobreescriu.", gr_subject: 'Assignatura', gr_cat: 'Categoria', gr_teoria: 'Teoria', gr_practica: 'Pràctiques', gr_seguimiento: 'Seguiment', gr_ra: 'Unitat (UD/RA)', gr_nora: 'Sense unitat', gr_weight: 'Pes', gr_ptitle: 'Títol de la prova', gr_sent: 'Enviat: {n} notes', gr_kept: "{n} conservades perquè es van editar a mà al Campus", gr_miss: 'No trobats o sense matrícula en aquesta assignatura: {n}', gr_nosync: "Sincronitza l'alumnat des d'Usuaris per carregar les assignatures del Campus.", gr_pubn: '{n} publicades', gr_pub1: '1 publicada', gr_empty: "Encara no hi ha notes. Es posen a la pestanya «Avaluació» de cada història.",
     gr_student: 'Alumne/a', gr_case: 'Cas', gr_mark: 'Nota', gr_pub: 'Publicada', gr_publish: "Publicar la nota a l'alumne", gr_comment: "Comentari d'avaluació", gr_saved: 'Nota desada', gr_none: 'Encara no hi ha nota publicada.', gr_open: 'Obrir',
     lv0: '0 · No evidenciat', lv1: '1 · Insuficient', lv2: '2 · Suficient', lv3: '3 · Notable', lv4: '4 · Excel·lent', yes: 'Sí', no: 'No',
@@ -148,7 +148,7 @@
     const d = r.data;
     if (r.type === 'medicacion') return d.farmaco + ' ' + d.dosis + ' (' + t('rt_' + d.via) + ') — ' + t('st_' + d.estado) + (d.slot ? ' · ' + d.slot : '');
     if (r.type === 'escala') return pick(SCALES[d.scale] || { es: d.scale }) + ': ' + d.total + ' — ' + lvName(d.scale, d.nivel);
-    if (r.type === 'valoracion') return PATRONES[d.patron][lang() === 'ca' ? 1 : 0] + (d.alterado ? ' ⚠' : '') + ': ' + d.texto;
+    if (r.type === 'valoracion') return PATRONES[d.patron][lang() === 'ca' ? 1 : 0] + (d.alterado ? ' · ' + t('pat_altered') : '') + ': ' + d.texto;
     if (r.type === 'plan') return d.problema + ' → ' + d.objetivo;
     if (r.type === 'plan_eval') return t('pl_' + d.resultado) + (d.texto ? ': ' + d.texto : '');
     if (r.type === 'informe') return t('inf_' + d.tipo) + ': ' + d.resumen;
@@ -261,24 +261,34 @@
     ['fr', 'fr', 'rpm', [['fr', '']], [12, 20]], ['glucemia', 'glucemia', 'mg/dl', [['glucemia', '']], [70, 180]], ['dolor', 'dolor', '/10', [['dolor', '']], [0, 3]],
   ];
   function lineChart(label, unit, keys, band, recs) {
-    const W = 360, H = 130, L = 36, R = 10, T = 12, B = 24;
+    const W = 360, H = 150, L = 40, R = 12, T = 14, B = 28;
     const pts = keys.map(([k]) => recs.filter((r) => r.data[k] != null).map((r) => ({ x: new Date(r.occurred).getTime(), v: r.data[k], r })));
     const all = pts.flat(); if (all.length < 2) return null;
     const xs = all.map((p) => p.x), x0 = Math.min(...xs), x1 = Math.max(...xs), vs = all.map((p) => p.v).concat(band);
     let y0 = Math.min(...vs), y1 = Math.max(...vs); const pad = (y1 - y0) * 0.12 || 1; y0 -= pad; y1 += pad;
     const X = (x) => L + (x1 === x0 ? (W - L - R) / 2 : ((x - x0) / (x1 - x0)) * (W - L - R)), Y = (v) => T + (1 - (v - y0) / (y1 - y0)) * (H - T - B);
-    const s = svg('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': label + ' (' + unit + ')', class: 'lc' });
-    s.appendChild(svg('rect', { x: L, y: Y(band[1]), width: W - L - R, height: Math.max(0, Y(band[0]) - Y(band[1])), class: 'band' }));
-    [y0 + pad, (y0 + y1) / 2, y1 - pad].forEach((v) => { s.appendChild(svg('line', { x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: 'gl' })); s.appendChild(svg('text', { x: L - 4, y: Y(v) + 3, class: 'ax', 'text-anchor': 'end' }, Math.round(v * 10) / 10)); });
-    s.appendChild(svg('text', { x: L, y: H - 6, class: 'ax' }, fmtDT(new Date(x0 - new Date().getTimezoneOffset() * 60000).toISOString())));
-    s.appendChild(svg('text', { x: W - R, y: H - 6, class: 'ax', 'text-anchor': 'end' }, fmtDT(new Date(x1 - new Date().getTimezoneOffset() * 60000).toISOString())));
+    const bandOf = (k) => (k === 'ta_dia' ? [60, 90] : band), outK = (k, v) => v < bandOf(k)[0] || v > bandOf(k)[1], outOf = (v, k) => (k ? outK(k, v) : v < band[0] || v > band[1]);
+    const lastRec = all.reduce((a, p) => (p.x >= a.x ? p : a)).r, lastVals = keys.map(([k]) => lastRec.data[k]).filter((v) => v != null), lastOut = keys.some(([k]) => lastRec.data[k] != null && outK(k, lastRec.data[k]));
+    const lastTxt = lastVals.join('/') + ' ' + unit;
+    const s = svg('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': label + ' (' + unit + '): ' + t('ch_last') + ' ' + lastTxt + ', ' + (lastOut ? t('ch_out') : t('ch_in')), class: 'lc' });
+    keys.forEach(([k]) => { const b = bandOf(k); s.appendChild(svg('rect', { x: L, y: Y(b[1]), width: W - L - R, height: Math.max(0, Y(b[0]) - Y(b[1])), class: 'band' })); });
+    [y0 + pad, (y0 + y1) / 2, y1 - pad].forEach((v) => { s.appendChild(svg('line', { x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: 'gl' })); s.appendChild(svg('text', { x: L - 5, y: Y(v) + 4, class: 'ax', 'text-anchor': 'end' }, Math.round(v * 10) / 10)); });
+    s.appendChild(svg('text', { x: L, y: H - 8, class: 'ax' }, fmtDT(new Date(x0 - new Date().getTimezoneOffset() * 60000).toISOString())));
+    s.appendChild(svg('text', { x: W - R, y: H - 8, class: 'ax', 'text-anchor': 'end' }, fmtDT(new Date(x1 - new Date().getTimezoneOffset() * 60000).toISOString())));
     pts.forEach((line, i) => {
+      const kk = keys[i][0];
       line.sort((a, b) => a.x - b.x);
       s.appendChild(svg('polyline', { points: line.map((p) => X(p.x) + ',' + Y(p.v)).join(' '), class: 'ln l' + i }));
-      line.forEach((p) => s.appendChild(svg('circle', { cx: X(p.x), cy: Y(p.v), r: 3, class: 'pt l' + i }, svg('title', null, label + ' ' + p.v + ' ' + unit + ' · ' + fmtDT(p.r.occurred)))));
+      line.forEach((p) => s.appendChild(svg('circle', { cx: X(p.x), cy: Y(p.v), r: outK(kk, p.v) ? 4.5 : 3.5, class: 'pt l' + i + (outK(kk, p.v) ? ' out' : '') }, svg('title', null, label + ' ' + p.v + ' ' + unit + ' · ' + fmtDT(p.r.occurred) + (outK(kk, p.v) ? ' · ' + t('ch_out') : '')))));
     });
-    return h('div', { class: 'panel chart' }, h('div', { class: 'ph' }, label, h('span', { class: 'sub' }, unit + (keys.length > 1 ? ' · ' + keys.map((k, i) => (i ? '■ ' : '● ') + k[1]).join(' ') : ''))), h('div', { class: 'pb' }, s));
+    const rows = recs.filter((r) => keys.some(([k]) => r.data[k] != null)).slice().sort((a, b) => (a.occurred < b.occurred ? 1 : -1)).slice(0, 30);
+    const alt = h('details', { class: 'alt' }, h('summary', null, t('ch_table')), h('div', { class: 'tw' }, h('table', { class: 'grid rt-no' }, h('thead', null, h('tr', null, h('th', null, t('ch_when')), h('th', null, label + ' (' + unit + ')'))),
+      h('tbody', null, rows.map((r) => { const v = keys.map(([k]) => r.data[k]).filter((x) => x != null).join('/'), o = keys.some(([k]) => r.data[k] != null && outK(k, r.data[k])); return h('tr', null, h('td', null, fmtDT(r.occurred)), h('td', null, h('b', null, v), o ? [' ', HC.flagIco(keys.some(([k]) => r.data[k] > bandOf(k)[1]) ? 'hi' : 'lo')] : null)); })))));
+    const legend = keys.length > 1 ? h('div', { class: 'row bc-leg' }, keys.map((k, i) => h('span', { class: 'sw-key' }, h('i', { class: 'sw l' + i }), t(k[0])))) : null;
+    return h('div', { class: 'panel chart' }, h('div', { class: 'ph' }, label, h('span', { class: 'sub' }, unit)),
+      h('div', { class: 'pb' }, h('p', { class: 'chart-last' }, h('b', null, lastVals.join('/')), h('span', { class: 'mut' }, unit), h('span', { class: 'chip ' + (lastOut ? 'red' : 'grn') }, HC.ico(lastOut ? 'alert' : 'check-circle'), lastOut ? t('ch_out') : t('ch_in'))), s, legend, alt));
   }
+
   function vitalCharts(cols) {
     const recs = cols.filter((r) => !r.void_at), charts = SERIES.map(([k, lk, unit, keys, band]) => lineChart(HC.plain(lk), unit, keys, band, recs)).filter(Boolean);
     return charts.length ? h('div', null, h('div', { class: 'chart-grid' }, charts), h('p', { class: 'mut' }, t('ch_band'))) : h('div', { class: 'panel' }, h('div', { class: 'pb mut' }, t('ch_none')));
@@ -296,7 +306,7 @@
     const dk = Object.keys(days).sort().slice(-10); if (!dk.length) return null;
     const gw = 92, L = 46, Rm = 10, T = 18, B = 42, Hh = 210, W = Math.max(L + Rm + dk.length * gw, 560);
     const max = Math.max(...dk.map((k) => Math.max(days[k].inn, days[k].diu + days[k].out)), 1), Y = (v) => T + (1 - v / max) * (Hh - T - B), base = Y(0);
-    const s = svg('svg', { viewBox: '0 0 ' + W + ' ' + Hh, role: 'img', 'aria-label': t('bc_title'), class: 'lc bc', style: 'width:' + Math.min(W * 1.5, 900) + 'px;max-width:100%' });
+    const s = svg('svg', { viewBox: '0 0 ' + W + ' ' + Hh, role: 'img', 'aria-label': t('bc_title'), class: 'lc bc' }); s.style.width = Math.min(W * 1.5, 900) + 'px';
     [0, max / 2, max].forEach((v) => { s.appendChild(svg('line', { x1: L, x2: W - Rm, y1: Y(v), y2: Y(v), class: 'gl' })); s.appendChild(svg('text', { x: L - 4, y: Y(v) + 3, class: 'ax', 'text-anchor': 'end' }, Math.round(v))); });
     const bar = (x, v, y0, cls, label) => { const h0 = Math.max(0, Y(y0) - Y(y0 + v)); if (!h0) return; s.appendChild(svg('rect', { x, y: Y(y0 + v), width: 30, height: h0, class: cls }, svg('title', null, label + ': ' + v + ' ml'))); };
     dk.forEach((k, i) => {
@@ -356,7 +366,7 @@
     const line = (r, txt) => h('div', { class: 'pd-line' }, h('b', null, fmtDT(r.occurred)), ' ', txt, h('span', { class: 'sub' }, ' — ' + r.author));
     const al = d.alergias || [];
     return h('div', { class: 'print-doc' },
-      h('div', { class: 'pd-head' }, h('div', null, h('h1', null, (d.apellidos || '') + ', ' + (d.nombre || '')), h('div', { class: 'sub' }, [d.nhc && 'NHC ' + d.nhc, d.fecha_nacimiento && fmtD(d.fecha_nacimiento), d.unidad, d.habitacion && 'H ' + d.habitacion, d.cama && 'C ' + d.cama].filter(Boolean).join(' · ')), h('div', null, al.length ? '⚠ ' + t('allergies') + ': ' + al.map((a) => a.agente).join(', ') : d.sin_alergias ? t('allergies_none') : ''), h('div', { class: 'sub' }, t('members') + ': ' + c.members.map((m) => m.name).join(', '))),
+      h('div', { class: 'pd-head' }, h('div', null, h('h1', null, (d.apellidos || '') + ', ' + (d.nombre || '')), h('div', { class: 'sub' }, [d.nhc && 'NHC ' + d.nhc, d.fecha_nacimiento && fmtD(d.fecha_nacimiento), d.unidad, d.habitacion && 'H ' + d.habitacion, d.cama && 'C ' + d.cama].filter(Boolean).join(' · ')), h('div', null, al.length ? h('span', { class: 'pd-al' }, HC.ico('alert'), t('allergies') + ': ' + al.map((a) => a.agente).join(', ')) : d.sin_alergias ? t('allergies_none') : ''), h('div', { class: 'sub' }, t('members') + ': ' + c.members.map((m) => m.name).join(', '))),
         h('div', { class: 'noprint row' }, h('button', { class: 'pri', onclick: () => window.print() }, t('print')), h('button', { onclick: () => { location.hash = '#/chart/' + c.chart.id; } }, t('print_back')))),
       sec(t('patient_summary'), d.diagnostico_medico ? [h('div', { class: 'pd-line' }, d.diagnostico_medico + (d.motivo_ingreso ? ' — ' + d.motivo_ingreso : ''))] : []),
       sec(t('tab_constantes'), by('constantes').map((r) => line(r, window.HC.recSummary(r)))), sec(t('tab_balance'), by('balance').map((r) => line(r, window.HC.recSummary(r)))),
@@ -431,14 +441,15 @@
   /* ---------- consignas: enunciado y tareas de una actividad ---------- */
   const TASK_KINDS = ['nota', 'constantes', 'balance', 'cuidado', 'medicacion', 'escala', 'valoracion', 'plan', 'plan_eval', 'informe', 'libre'];
   const ckLabel = (k) => t('ck_' + k);
-  const taskLegend = (marks) => h('p', { class: 'mut cs-leg', style: 'font-size:.85em;margin:8px 0 0' }, h('b', null, t('cs_leg') + ': '), marks.map(([sym, key], i) => [i ? '   ' : '', h('span', { class: 'ck', 'aria-hidden': 'true', style: 'width:auto' }, sym), ' ' + t(key)]));
+  const tick = (d) => HC.ico(d == null ? 'minus-circle' : d ? 'check-circle' : 'circle');
+  const taskLegend = (marks) => h('p', { class: 'mut cs-leg row' }, h('b', null, t('cs_leg') + ': '), marks.map(([d, key]) => h('span', { class: 'sw-key' }, h('span', { class: 'ck', 'aria-hidden': 'true' }, tick(d)), t(key))));
   function consignaCard(c, open) {
     const k = c.consigna; if (!k) return null;
     const typed = k.tasks.filter((x) => x.done != null), done = typed.filter((x) => x.done).length;
-    const items = k.tasks.map((x) => h('li', { class: x.done ? 'ok' : '' }, h('span', { class: 'ck', 'aria-hidden': 'true' }, x.done == null ? '•' : x.done ? '✓' : '○'), ' ', x.day ? h('span', { class: 'chip' + (x.day === c.chart.day && c.chart.pace === 'student' ? ' grn' : '') }, t('dy_d') + x.day) : null, x.day ? ' ' : null, x.text,
+    const items = k.tasks.map((x) => h('li', { class: x.done ? 'ok' : '' }, h('span', { class: 'ck', 'aria-hidden': 'true' }, tick(x.done)), h('span', { class: 'dc-sr-only' }, t(x.done == null ? 'cs_leg_free' : x.done ? 'cs_leg_done' : 'cs_leg_pend') + ': '), ' ', x.day ? h('span', { class: 'chip' + (x.day === c.chart.day && c.chart.pace === 'student' ? ' grn' : '') }, t('dy_d') + x.day) : null, x.day ? ' ' : null, x.text,
       x.done != null ? h('span', { class: 'mut' }, ' · ' + ckLabel(x.kind) + (x.min > 1 ? ' ' + Math.min(x.count, x.min) + '/' + x.min : '')) : null, x.done ? h('span', { class: 'sr' }, ' (' + t('yes') + ')') : null));
     return h('details', { class: 'panel consigna', open: !!open }, h('summary', null, t('cs_title') + ': ' + k.title, typed.length ? h('span', { class: 'chip ' + (done === typed.length ? 'grn' : '') }, t('cs_progress').replace('{a}', done).replace('{b}', typed.length)) : null, k.due ? h('span', { class: 'chip amb' }, t('cs_due_on') + ' ' + fmtD(k.due)) : null),
-      h('div', { class: 'pb' }, k.body ? h('p', { class: 'cs-body' }, k.body) : null, items.length ? h('ul', { class: 'cs-tasks' }, items) : null, items.length ? taskLegend([['✓', 'cs_leg_done'], ['○', 'cs_leg_pend'], ['•', 'cs_leg_free']]) : null));
+      h('div', { class: 'pb' }, k.body ? h('p', { class: 'cs-body' }, k.body) : null, items.length ? h('ul', { class: 'cs-tasks' }, items) : null, items.length ? taskLegend([[true, 'cs_leg_done'], [false, 'cs_leg_pend'], [null, 'cs_leg_free']]) : null));
   }
   function consignaControl(chartId, list, current, refresh) {
     if (!list || !list.length) return null;
@@ -453,10 +464,10 @@
       const tasks = (k ? k.tasks : []).map((x) => Object.assign({}, x)), box = h('div', { class: 'cs-edit' });
       const draw = () => { clear(box); tasks.forEach((x, i) => add(box, h('div', { class: 'row' },
         h('select', { 'aria-label': t('cs_tasks'), onchange: (e) => { x.kind = e.target.value; if (x.kind !== 'libre' && !x.min) x.min = 1; draw(); } }, TASK_KINDS.map((kd) => h('option', { value: kd, selected: kd === x.kind }, ckLabel(kd)))),
-        x.kind === 'libre' ? null : h('input', { type: 'number', min: 1, max: 20, value: x.min || 1, 'aria-label': t('cs_min'), title: t('cs_min'), style: 'width:70px', oninput: (e) => { x.min = e.target.value; } }),
-        h('input', { type: 'number', min: 1, max: 60, value: x.day || '', placeholder: t('cs_day'), title: t('cs_day'), 'aria-label': t('cs_day'), style: 'width:70px', oninput: (e) => { x.day = e.target.value; } }),
-        h('input', { type: 'text', value: x.text || '', placeholder: t('cs_task_text'), 'aria-label': t('cs_task_text'), style: 'flex:1 1 220px', oninput: (e) => { x.text = e.target.value; } }),
-        h('button', { class: 'sm danger', 'aria-label': t('delete'), onclick: () => { tasks.splice(i, 1); draw(); } }, '✕')))); };
+        x.kind === 'libre' ? null : h('input', { type: 'number', min: 1, max: 20, value: x.min || 1, 'aria-label': t('cs_min'), title: t('cs_min'), class: 'in-70', oninput: (e) => { x.min = e.target.value; } }),
+        h('input', { type: 'number', min: 1, max: 60, value: x.day || '', placeholder: t('cs_day'), title: t('cs_day'), 'aria-label': t('cs_day'), class: 'in-70', oninput: (e) => { x.day = e.target.value; } }),
+        h('input', { type: 'text', value: x.text || '', placeholder: t('cs_task_text'), 'aria-label': t('cs_task_text'), class: 'in-grow', oninput: (e) => { x.text = e.target.value; } }),
+        h('button', { class: 'sm danger', 'aria-label': t('delete'), onclick: () => { tasks.splice(i, 1); draw(); } }, HC.ico('x'))))); };
       draw();
       return h('div', { class: 'pb' }, h('div', { class: 'cols' }, field(t('cs_title_f'), ti), field(t('cs_due'), du)), field(t('cs_body'), bo), h('h3', { class: 'sec-h' }, t('cs_tasks')), box,
         h('p', { class: 'row' }, h('button', { onclick: () => { tasks.push({ kind: 'constantes', min: 1, text: '' }); draw(); } }, '+ ' + t('cs_add_task')),
@@ -464,10 +475,10 @@
           h('button', { onclick: refresh }, t('cs_cancel'))));
     };
     const show1 = (k) => h('div', { class: 'panel consigna' }, h('div', { class: 'ph' }, k.title, k.due ? h('span', { class: 'chip amb' }, t('cs_due_on') + ' ' + fmtD(k.due)) : null),
-      h('div', { class: 'pb' }, k.body ? h('p', { class: 'cs-body' }, k.body) : null, k.tasks.length ? h('ul', { class: 'cs-tasks' }, k.tasks.map((x) => h('li', null, h('span', { class: 'ck', 'aria-hidden': 'true' }, x.kind === 'libre' ? '•' : '○'), ' ', x.day ? h('span', { class: 'chip' }, t('dy_d') + x.day) : null, x.day ? ' ' : null, x.text, h('span', { class: 'mut' }, ' · ' + ckLabel(x.kind) + (x.min > 1 ? ' ×' + x.min : ''))))) : null, k.tasks.length ? taskLegend([['○', 'cs_leg_auto'], ['•', 'cs_leg_free'], ['', 'cs_leg_n']]) : null,
-        h('p', { class: 'row' }, h('span', { class: 'mut' }, t('cs_link') + ':'), h('input', { type: 'text', readonly: true, value: HC.campus() + '/api/historia/sso?to=consigna/' + k.id, 'aria-label': t('cs_link'), style: 'flex:1 1 320px' }), h('button', { class: 'sm', onclick: async (e) => { const inp = e.target.previousSibling; try { await navigator.clipboard.writeText(inp.value); } catch (_) { inp.select(); document.execCommand('copy'); } toast(t('cs_copied')); } }, t('cs_copy'))),
+      h('div', { class: 'pb' }, k.body ? h('p', { class: 'cs-body' }, k.body) : null, k.tasks.length ? h('ul', { class: 'cs-tasks' }, k.tasks.map((x) => h('li', null, h('span', { class: 'ck', 'aria-hidden': 'true' }, tick(x.kind === 'libre' ? null : false)), ' ', x.day ? h('span', { class: 'chip' }, t('dy_d') + x.day) : null, x.day ? ' ' : null, x.text, h('span', { class: 'mut' }, ' · ' + ckLabel(x.kind) + (x.min > 1 ? ' ×' + x.min : ''))))) : null, k.tasks.length ? taskLegend([['○', 'cs_leg_auto'], ['•', 'cs_leg_free'], ['', 'cs_leg_n']]) : null,
+        h('p', { class: 'row' }, h('span', { class: 'mut' }, t('cs_link') + ':'), h('input', { type: 'text', readonly: true, value: HC.campus() + '/api/historia/sso?to=consigna/' + k.id, 'aria-label': t('cs_link'), class: 'in-grow' }), h('button', { class: 'sm', onclick: async (e) => { const inp = e.target.previousSibling; try { await navigator.clipboard.writeText(inp.value); } catch (_) { inp.select(); document.execCommand('copy'); } toast(t('cs_copied')); } }, t('cs_copy'))),
         h('p', { class: 'row' }, h('button', { class: 'sm', onclick: () => { const holder = box1[k.id]; holder.replaceChildren(form(k)); } }, t('cs_edit')),
-          h('button', { class: 'sm danger', onclick: async () => { if (!confirm(t('cs_confirm_del'))) return; try { await api('DELETE', '/api/consignas/' + k.id); refresh(); } catch (e) { fail(e); } } }, t('delete')))));
+          h('button', { class: 'sm danger', onclick: async () => { if (!(await HC.confirm(t('cs_confirm_del'), { danger: true, yes: t('delete') }))) return; try { await api('DELETE', '/api/consignas/' + k.id); refresh(); } catch (e) { fail(e); } } }, t('delete')))));
     const box1 = {}, wrap = (k) => (box1[k.id] = h('div', null, show1(k)));
     const nuevo = h('details', { class: 'panel' }, h('summary', null, '+ ' + t('cs_new')), form(null));
     return [h('p', { class: 'mut' }, t('cs_help')), consignas.length ? consignas.map(wrap) : panel(null, empty(t('cs_empty'))), nuevo];
@@ -478,8 +489,8 @@
   const classChips = (opt, p) => [(p.subjects || []).map((x) => h('span', { class: 'chip' }, subjTitle(opt, x))), (p.topics || []).map((x) => h('span', { class: 'chip tag' }, '#' + x))];
   async function classifyPanel(patient, refresh) {
     const opt = await api('GET', '/api/class-options'); const subs = new Set(patient.subjects || []); let topics = (patient.topics || []).slice();
-    const tbox = h('div', { class: 'row' }), dl = h('datalist', { id: 'topic-list' }, opt.topics.map((x) => h('option', { value: x.name }))), inp = h('input', { type: 'text', list: 'topic-list', placeholder: t('cl_topics_ph'), 'aria-label': t('cl_topics'), style: 'max-width:240px' });
-    const drawT = () => { clear(tbox); topics.forEach((x, i) => add(tbox, h('span', { class: 'chip tag' }, '#' + x, ' ', h('button', { class: 'link', 'aria-label': t('cl_remove') + ' ' + x, onclick: () => { topics.splice(i, 1); drawT(); } }, '✕')))); };
+    const tbox = h('div', { class: 'row' }), dl = h('datalist', { id: 'topic-list' }, opt.topics.map((x) => h('option', { value: x.name }))), inp = h('input', { type: 'text', list: 'topic-list', placeholder: t('cl_topics_ph'), 'aria-label': t('cl_topics'), class: 'in-240' });
+    const drawT = () => { clear(tbox); topics.forEach((x, i) => add(tbox, h('span', { class: 'chip tag' }, '#' + x, ' ', h('button', { class: 'link', 'aria-label': t('cl_remove') + ' ' + x, onclick: () => { topics.splice(i, 1); drawT(); } }, HC.ico('x'))))); };
     const addT = () => { const v = inp.value.trim(); if (v && !topics.some((x) => x.toLowerCase() === v.toLowerCase())) { topics.push(v); drawT(); } inp.value = ''; };
     inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addT(); } }); drawT();
     return h('details', { class: 'panel', open: !!((patient.subjects || []).length || (patient.topics || []).length) }, h('summary', null, t('cl_title'), ' ', classChips(opt, patient)),
@@ -500,14 +511,14 @@
     });
     const drawBar = () => {
       clear(bar); if (!sel.size) return;
-      const ss = h('select', { 'aria-label': t('cl_pick_subj'), style: 'max-width:260px' }, h('option', { value: '' }, t('cl_pick_subj')), opt.subjects.map((x) => h('option', { value: x.slug }, x.title)));
-      const ti = h('input', { type: 'text', list: 'topic-list-b', placeholder: t('cl_topics_ph'), 'aria-label': t('cl_topics'), style: 'max-width:200px' }), tl = h('datalist', { id: 'topic-list-b' }, opt.topics.map((x) => h('option', { value: x.name })));
+      const ss = h('select', { 'aria-label': t('cl_pick_subj'), class: 'in-260' }, h('option', { value: '' }, t('cl_pick_subj')), opt.subjects.map((x) => h('option', { value: x.slug }, x.title)));
+      const ti = h('input', { type: 'text', list: 'topic-list-b', placeholder: t('cl_topics_ph'), 'aria-label': t('cl_topics'), class: 'in-240' }), tl = h('datalist', { id: 'topic-list-b' }, opt.topics.map((x) => h('option', { value: x.name })));
       const go = (mode) => async () => { const sj = ss.value ? [ss.value] : [], tp = ti.value.trim() ? [ti.value.trim()] : []; if (!sj.length && !tp.length) return; try { await api('POST', '/api/patients/classify', { ids: [...sel], [mode + '_subjects']: sj, [mode + '_topics']: tp }); toast(t('cl_saved')); viewPatients(); } catch (e) { fail(e); } };
       add(bar, h('div', { class: 'panel' }, h('div', { class: 'pb row' }, h('b', null, t('cl_selected').replace('{n}', sel.size)), ss, ti, tl, h('button', { class: 'pri sm', onclick: go('add') }, t('cl_add')), h('button', { class: 'sm', onclick: go('remove') }, t('cl_remove')), h('button', { class: 'link', onclick: () => { sel.clear(); draw(); } }, t('cl_clear')))));
     };
     const draw = () => {
       const v = visible(); clear(table); count.textContent = t('cl_showing').replace('{a}', v.length).replace('{b}', patients.length); drawBar();
-      if (!v.length) return add(table, panel(null, empty(patients.length ? t('cl_no_match') : t('patients_empty'))));
+      if (!v.length) return add(table, panel(null, empty(patients.length ? t('cl_no_match') : t('patients_empty'), patients.length ? 'search' : 'users')));
       const all = h('input', { type: 'checkbox', 'aria-label': t('select_all'), checked: v.every((p) => sel.has(p.id)), onchange: (e) => { v.forEach((p) => (e.target.checked ? sel.add(p.id) : sel.delete(p.id))); draw(); } });
       const rows = v.map((p) => { const d = p.data, age = HC.ageOf(d.fecha_nacimiento);
         return h('tr', { class: 'clk', onclick: () => { location.hash = '#/patient/' + p.id; } },
@@ -521,8 +532,10 @@
     const ss = h('select', { 'aria-label': t('cl_subjects'), onchange: (e) => { f.subj = e.target.value; draw(); } }, h('option', { value: '' }, t('cl_all_subj')), h('option', { value: '__none' }, t('cl_unclassified')), opt.subjects.map((x) => h('option', { value: x.slug }, x.title)));
     const ts = h('select', { 'aria-label': t('cl_topics'), onchange: (e) => { f.topic = e.target.value; draw(); } }, h('option', { value: '' }, t('cl_all_topics')), opt.topics.map((x) => h('option', { value: x.name }, x.name + ' (' + x.count + ')')));
     draw();
+    const act = patients.filter((p) => !p.archived), unas = act.filter((p) => !p.charts), kp = (n, l, cls, help) => h('div', { class: 'kpi' + (cls ? ' ' + cls : ''), title: help || null }, h('b', null, n), h('span', null, l));
+    const kpis = patients.length ? h('div', { class: 'kpis' }, kp(act.length, t('kpi_patients')), kp(patients.reduce((a, p) => a + p.charts, 0), t('kpi_charts')), kp(patients.reduce((a, p) => a + p.records, 0), t('kpi_records')), kp(unas.length, t('kpi_unassigned'), unas.length ? 'alert' : '', t('kpi_unassigned_help')), patients.length > act.length ? kp(patients.length - act.length, t('kpi_archived')) : null) : null;
     HC.show(h('div', { class: 'pg-title' }, h('h1', null, t('worklist')), h('div', { class: 'row' }, h('button', { onclick: () => { location.hash = '#/import'; } }, t('imp_btn')), h('button', { class: 'pri', onclick: () => { location.hash = '#/patient/new'; } }, '+ ' + t('new_patient')))),
-      patients.length ? h('div', { class: 'toolbar row' }, search, ss, ts, count) : null, bar, table);
+      kpis, patients.length ? h('div', { class: 'toolbar row' }, search, ss, ts, count) : null, bar, table);
   }
 
   /* ---------- eliminar el caso completo ---------- */
@@ -537,7 +550,7 @@
 
   /* ---------- el caso en PDF ---------- */
   function casePdfBar(id) {
-    const day = h('input', { type: 'number', min: 1, max: 60, value: 1, style: 'width:70px', 'aria-label': t('pdf_day') });
+    const day = h('input', { type: 'number', min: 1, max: 60, value: 1, class: 'in-70', 'aria-label': t('pdf_day') });
     const link = (full, label, cls) => h('a', { class: 'btn ' + (cls || ''), download: '', href: '#', onclick: (e) => { e.currentTarget.href = '/api/patients/' + id + '/case.pdf?lang=' + lang().toUpperCase() + (full ? '&full=1' : '&day=' + (parseInt(day.value, 10) || 1)); } }, label);
     return h('div', { class: 'panel' }, h('div', { class: 'pb' }, h('div', { class: 'row' }, h('b', null, t('pdf_case') + ':'), link(false, t('pdf_students'), 'pri'), h('label', { class: 'row' }, t('pdf_day'), day), link(true, t('pdf_full'))), h('p', { class: 'mut' }, t('pdf_help'))));
   }
@@ -549,7 +562,7 @@
     const last = ch.day >= ch.cap, k = c.consigna, pending = k ? k.tasks.filter((x) => x.day === ch.day && x.done === false) : [];
     const btn = !last && ch.status === 'open' ? h('button', { class: 'pri', onclick: async () => {
       const msg = t('dy_confirm').replace(/\{n\}/g, ch.day).replace('{m}', ch.day + 1) + (pending.length ? '\n\n' + t('dy_pending') + '\n- ' + pending.map((x) => x.text).join('\n- ') : '');
-      if (!confirm(msg)) return;
+      if (!(await HC.confirm(msg))) return;
       try { await api('POST', '/api/charts/' + ch.id + '/advance'); toast(t('dy_now').replace('{n}', ch.day + 1)); refresh(); } catch (e) { fail(e); }
     } }, t('dy_finish').replace('{n}', ch.day)) : null;
     return h('div', { class: 'panel daybar' }, h('div', { class: 'pb row' }, h('b', null, t('dy_title').replace('{n}', ch.day).replace('{m}', ch.cap)), last ? h('span', { class: 'chip grn' }, t('dy_last')) : null, btn, ch.status === 'open' ? h('span', { class: 'mut' }, t('dy_help')) : null));
@@ -557,7 +570,7 @@
   /* profesorado: ritmo de una historia y último día */
   function paceControl(chartId, chart, refresh) {
     const sel = h('select', { 'aria-label': t('pace_title') }, [['teacher', t('pace_teacher')], ['student', t('pace_student')]].map(([v, l]) => h('option', { value: v, selected: (chart.pace || 'teacher') === v }, l)));
-    const cap = h('input', { type: 'number', min: 1, max: 60, value: chart.max_day || '', placeholder: t('pace_auto') + ' (' + chart.cap + ')', 'aria-label': t('pace_cap'), style: 'width:170px' });
+    const cap = h('input', { type: 'number', min: 1, max: 60, value: chart.max_day || '', placeholder: t('pace_auto') + ' (' + chart.cap + ')', 'aria-label': t('pace_cap'), class: 'in-170' });
     return h('details', { class: 'win' }, h('summary', null, t('pace_title') + ': ' + (chart.pace === 'student' ? t('pace_student_short') + ' · ' + t('day_case') + ' ' + chart.day + '/' + chart.cap : t('pace_teacher_short'))),
       h('div', { class: 'row' }, h('label', { class: 'row' }, t('pace_title'), sel), h('label', { class: 'row' }, t('pace_cap'), cap),
         h('button', { class: 'sm pri', onclick: async () => { try { await api('PUT', '/api/charts/' + chartId, { pace: sel.value, max_day: cap.value || null }); toast(t('pace_saved')); refresh(); } catch (e) { fail(e); } } }, t('pace_save'))),
@@ -577,17 +590,19 @@
   async function seguimientoTab(X) {
     const { groups } = await api('GET', '/api/patients/' + X.id + '/seguimiento');
     if (!groups.length) return panel(null, empty(t('seg_empty')));
-    const ticks = (p) => p.map((x) => (x.done == null ? '•' : x.done ? '✓' : '○')).join(' ');
+    const DAY7 = 7 * 864e5, stale = (c) => c.records > 0 && c.last && Date.now() - new Date(c.last).getTime() > DAY7;
+    const prog = (p) => { const tot = p.filter((x) => x.done != null).length, dn = p.filter((x) => x.done).length; return h('div', { class: 'prog' }, HC.meter(tot ? (dn / tot) * 100 : 0, tot && dn === tot ? 'ok' : dn ? '' : 'none'), h('span', { class: 'n' }, dn + '/' + tot)); };
+    const alerts = (c) => [c.records === 0 ? h('span', { class: 'chip amb' }, HC.ico('alert'), t('seg_idle')) : stale(c) ? h('span', { class: 'chip amb' }, HC.ico('clock'), t('seg_stale')) : null];
     return [h('p', { class: 'mut' }, t('seg_help')), groups.map((g) => panel(g.consigna ? g.consigna.title + (g.consigna.due ? ' · ' + t('cs_due_on') + ' ' + fmtD(g.consigna.due) : '') : t('seg_none'),
       h('div', { class: 'tw' }, h('table', { class: 'grid' }, h('thead', null, h('tr', null, [t('col_chart'), t('seg_students'), t('seg_tasks'), t('seg_records'), t('seg_last'), t('seg_grade'), ''].map((x, i) => h('th', { class: i === 3 ? 'r' : '' }, x)))),
         h('tbody', null, g.charts.map((c) => h('tr', null,
           h('td', null, h('a', { href: '#/chart/' + c.id }, c.name || '#' + c.id), h('div', { class: 'sub' }, c.kind === 'team' ? t('team') : t('individual')), c.pace === 'student' ? h('div', null, h('span', { class: 'chip' }, t('dy_title').replace('{n}', c.day).replace('{m}', c.cap))) : null, c.window === 'scheduled' ? h('div', null, h('span', { class: 'chip' }, t('win_from_on').replace('{d}', fmtD(c.opens)))) : c.window === 'ended' ? h('div', null, h('span', { class: 'chip amb' }, t('win_ended_on').replace('{d}', fmtD(c.closes)))) : null),
           h('td', null, c.members.map((m) => h('div', null, h('a', { href: '#/student/' + m.id }, m.name), h('span', { class: 'mut' }, ' · ' + m.records)))),
-          h('td', null, g.consigna ? h('span', null, ticks(c.progress), ' ', h('span', { class: 'mut' }, c.progress.filter((x) => x.done).length + '/' + c.progress.filter((x) => x.done != null).length)) : '—'),
-          h('td', { class: 'r' }, c.records), h('td', null, c.last ? fmtDT(c.last) : '—'),
+          h('td', null, g.consigna ? prog(c.progress) : '—'),
+          h('td', { class: 'r' }, c.records, h('div', null, alerts(c))), h('td', null, c.last ? fmtDT(c.last) : '—'),
           h('td', null, c.members.map((m) => h('div', null, grade10(m.grade)))),
           h('td', null, h('div', { class: 'row' }, h('button', { class: 'sm', onclick: () => { location.hash = '#/chart/' + c.id; } }, t('seg_open')), h('button', { class: 'sm', onclick: () => { location.hash = '#/chart/' + c.id + '/eval'; } }, t('seg_eval'))))))))),
-      { flush: true })), h('p', { class: 'mut' }, '* ' + t('unpublished'))];
+      { flush: true, right: h('span', { class: 'row' }, h('span', { class: 'chip ' + (g.charts.some((c) => c.records === 0) ? 'amb' : 'grn') }, t('seg_active').replace('{a}', g.charts.filter((c) => c.records > 0).length).replace('{b}', g.charts.length)), g.charts.some((c) => c.window === 'ended') ? h('span', { class: 'chip amb' }, HC.ico('clock'), t('seg_late')) : null) })), h('p', { class: 'mut' }, '* ' + t('unpublished'))];
   }
 
   /* ---------- borrar datos del alumnado ---------- */

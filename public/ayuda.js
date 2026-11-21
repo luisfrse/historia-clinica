@@ -8,7 +8,7 @@
     if (k === 'lead') return html('p', 'hp-lead', b[1]);
     if (k === 'h2') return html('h3', 'sec-h', b[1]);
     if (k === 'p') return html('p', '', b[1]);
-    if (k === 'img') return h('img', { class: 'hp-img', src: '/ayuda/' + L + '/' + b[1] + '.jpg', alt: '', loading: 'lazy', style: b[2] && b[2] < 1 ? 'max-width:' + Math.round(b[2] * 100) + '%' : null });
+    if (k === 'img') { const im = h('img', { class: 'hp-img', src: '/ayuda/' + L + '/' + b[1] + '.jpg', alt: '', loading: 'lazy' }); if (b[2] && b[2] < 1) im.style.maxWidth = Math.round(b[2] * 100) + '%'; return im; }
     if (k === 'leg') return h('ul', { class: 'hp-leg' }, b[1].map(([n, tx]) => { const li = h('li'); li.append(h('span', { class: 'hp-n' }, n)); li.append(html('span', '', tx)); return li; }));
     if (k === 'box') return html('div', 'hp-box ' + b[1], '<b>' + (b[1] === 'tip' ? D.ui.tip : D.ui.warn) + '.</b> ' + b[2]);
     if (k === 'flow') return h('div', { class: 'hp-flow' }, b[1].map(([n, tx, s]) => html('div', 'hp-step', '<b class="hp-big">' + n + '</b><b>' + tx + '</b><span>' + s + '</span>')));

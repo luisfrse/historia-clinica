@@ -24,7 +24,7 @@ CAT.seedCatalog(db);
 const TAX = require('./lib/taxonomy'); TAX.seedTaxonomy(db);
 
 /* ---------- utilidades HTTP ---------- */
-const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
+const CSP = "default-src 'none'; img-src 'self' data:; style-src 'self'; font-src 'self'; script-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 const hdrs = (extra) => Object.assign({ 'Content-Security-Policy': CSP, 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', 'X-Frame-Options': 'DENY', 'X-Robots-Tag': 'noindex', 'Permissions-Policy': 'camera=(), microphone=(), geolocation=()', 'Strict-Transport-Security': 'max-age=31536000' }, extra || {});
 function json(res, code, obj, extra) { res.writeHead(code, hdrs(Object.assign({ 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }, extra))); res.end(JSON.stringify(obj)); }
 const ipOf = (req) => { const x = String(req.headers['x-forwarded-for'] || '').split(',').map((s) => s.trim()).filter(Boolean); return x.length ? x[x.length - 1] : req.socket.remoteAddress || '?'; };
@@ -195,9 +195,9 @@ R('GET', '/api/control/sso', async (req, res, ctx) => {
 R('POST', '/api/admin/login', async (req, res) => {
   const ip = ipOf(req);
   if (!ADMIN_PASSWORD) return bad(res, 'disabled', 503);
-  if (limLogin.blocked(ip)) return bad(res, 'rate', 429);
+  if (limLogin.blocked(ip)) return json(res, 429, { error: 'rate', wait: limLogin.wait(ip) });
   const b = await readJson(req, 2e3);
-  if (!U.eq(U.sha(String(b.password || '')), U.sha(ADMIN_PASSWORD))) { limLogin.fail(ip); audit('?', 'login-fallido', ip); return bad(res, 'auth', 401); }
+  if (!U.eq(U.sha(String(b.password || '')), U.sha(ADMIN_PASSWORD))) { limLogin.fail(ip); audit('?', 'login-fallido', ip); return json(res, 401, { error: 'auth', left: limLogin.left(ip) }); }
   limLogin.ok(ip);
   const u = upsertUser('admin@local', 'Administrador', 'es', [], 'admin');
   audit(u.email, 'login-admin', '');
@@ -207,11 +207,11 @@ const pwHash = (pw) => { const salt = crypto.randomBytes(16); return salt.toStri
 const pwCheck = (pw, stored) => { try { const [sl, hs] = String(stored || '').split(':'); const a = crypto.scryptSync(String(pw), Buffer.from(sl, 'base64'), 32), b = Buffer.from(hs, 'base64'); return a.length === b.length && crypto.timingSafeEqual(a, b); } catch (_) { return false; } };
 R('POST', '/api/teacher/login', async (req, res) => {
   const ip = ipOf(req);
-  if (limLogin.blocked(ip)) return bad(res, 'rate', 429);
+  if (limLogin.blocked(ip)) return json(res, 429, { error: 'rate', wait: limLogin.wait(ip) });
   const b = await readJson(req, 2e3), email = String(b.email || '').toLowerCase().trim();
   const u = db.get("SELECT * FROM users WHERE email = ? AND role = 'teacher' AND active = 1", email);
   const ok = pwCheck(b.password, u && u.pw) && !!u;
-  if (!ok) { limLogin.fail(ip); audit(email || '?', 'login-fallido', ip); return bad(res, 'auth', 401); }
+  if (!ok) { limLogin.fail(ip); audit(email || '?', 'login-fallido', ip); return json(res, 401, { error: 'auth', left: limLogin.left(ip) }); }
   limLogin.ok(ip); db.run('UPDATE users SET last_login = ? WHERE id = ?', new Date().toISOString(), u.id); audit(u.email, 'login-profesorado', '');
   json(res, 200, { ok: true }, { 'Set-Cookie': setCookie(req, newSession(u.id), TTL / 1000) });
 }, { open: true });
@@ -962,12 +962,12 @@ R('GET', '/api/grades.csv', async (req, res) => {
 }, { staff: true });
 
 /* ---------- servidor ---------- */
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.ico': 'image/x-icon', '.svg': 'image/svg+xml' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.ico': 'image/x-icon', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.webmanifest': 'application/manifest+json' };
 function serveStatic(req, res, pathname) {
   let rel = pathname === '/' ? '/index.html' : pathname;
   const file = path.normalize(path.join(PUB, rel));
   if (!file.startsWith(PUB + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) { res.writeHead(404, hdrs({ 'Content-Type': 'text/plain' })); return res.end('No encontrado'); }
-  res.writeHead(200, hdrs({ 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' }));
+  res.writeHead(200, hdrs({ 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': path.extname(file) === '.woff2' ? 'public, max-age=2592000' : 'no-cache' }));
   fs.createReadStream(file).pipe(res);
 }
 const server = http.createServer(async (req, res) => {
