@@ -15,8 +15,10 @@ const FILES = [
   'tokens.css', 'base.css', 'base.js',
   'fuentes/fuentes.css', 'fuentes/LICENCIAS.txt', 'fuentes/bricolage-latin.woff2', 'fuentes/bricolage-latin-ext.woff2', 'fuentes/sourcesans3-latin.woff2', 'fuentes/sourcesans3-latin-ext.woff2',
   'iconos/iconos.js',
-  'entrada/entrada.css', 'entrada/passkey.js', 'entrada/ajustes-llaves.js',
+  'entrada/entrada.css', 'entrada/passkey.js', 'entrada/ajustes-llaves.js', 'entrada/confianza.js',
 ];
+// Módulos de SERVIDOR (no van a public/): origen en diseno-comun -> destino en la app. Dispositivo de confianza: docs/dispositivo-confianza.md
+const SERVER_FILES = { 'entrada/servidor/confianza.cjs': 'lib/dc/confianza.cjs' };
 if (!fs.existsSync(path.join(SRC, 'tokens.css'))) { console.error('No encuentro el diseño común en ' + SRC); process.exit(2); }
 let n = 0; const manifest = {};
 for (const f of FILES) {
@@ -27,7 +29,15 @@ for (const f of FILES) {
   if (!fs.existsSync(to) || !fs.readFileSync(to).equals(buf)) { fs.writeFileSync(to, buf); n++; }
   manifest[f] = crypto.createHash('sha256').update(buf).digest('hex').slice(0, 16);
 }
+for (const [f, dest] of Object.entries(SERVER_FILES)) {
+  const from = path.join(SRC, f), to = path.join(ROOT, dest);
+  if (!fs.existsSync(from)) { console.error('Falta en el origen: ' + f); process.exit(2); }
+  fs.mkdirSync(path.dirname(to), { recursive: true });
+  const buf = fs.readFileSync(from);
+  if (!fs.existsSync(to) || !fs.readFileSync(to).equals(buf)) { fs.writeFileSync(to, buf); n++; }
+  manifest[dest] = crypto.createHash('sha256').update(buf).digest('hex').slice(0, 16);
+}
 let commit = 'desconocido';
 try { commit = execFileSync('git', ['-C', SRC, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).trim(); } catch { /* origen sin git */ }
 fs.writeFileSync(path.join(DST, 'VERSION.json'), JSON.stringify({ origen: 'diseno-comun', commit, ficheros: manifest }, null, 2) + '\n');
-console.log(`diseño común (${commit}): ${n} fichero(s) actualizados de ${FILES.length} en public/dc/`);
+console.log(`diseño común (${commit}): ${n} fichero(s) actualizados de ${FILES.length + Object.keys(SERVER_FILES).length} (public/dc/ y lib/dc/)`);

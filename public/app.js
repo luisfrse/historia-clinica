@@ -4,10 +4,10 @@
   let ME = null, LANG = (navigator.language || 'es').startsWith('ca') ? 'ca' : 'es', chartKey = 0, chartUser = '', loadTimer = 0, tickTimer = 0;
 
   Object.assign(window.I18N.es, {
-    pk_btn: 'Entrar con huella o llave', pk_or: 'o con tu contraseña', nav_security: 'Huella y llaves de acceso', sec_help: 'Solo profesorado y administración. La contraseña sigue funcionando siempre, aunque quites todas las llaves.', sec_off: 'Las llaves de acceso están desactivadas en este servidor (la dirección pública no sirve para llaves). Entra con la contraseña y avisa a quien administre el servidor.',
+    pk_btn: 'Entrar con huella o llave', en_trust: 'Confiar en este dispositivo', en_trust_hint: 'Durante {d} días sin usarlo, aquí no pedirá contraseña ni huella. Solo en un dispositivo tuyo; las acciones importantes seguirán pidiendo confirmar.', sec_trust_fail: 'Has entrado, pero no se pudo recordar este dispositivo.', pk_or: 'o con tu contraseña', nav_security: 'Huella y llaves de acceso', sec_help: 'Solo profesorado y administración. La contraseña sigue funcionando siempre, aunque quites todas las llaves.', sec_off: 'Las llaves de acceso están desactivadas en este servidor (la dirección pública no sirve para llaves). Entra con la contraseña y avisa a quien administre el servidor.',
   });
   Object.assign(window.I18N.ca, {
-    pk_btn: 'Entra amb empremta o clau', pk_or: 'o amb la teva contrasenya', nav_security: "Empremta i claus d'accés", sec_help: 'Només professorat i administració. La contrasenya continua funcionant sempre, encara que treguis totes les claus.', sec_off: "Les claus d'accés estan desactivades en aquest servidor (l'adreça pública no serveix per a claus). Entra amb la contrasenya i avisa qui administri el servidor.",
+    pk_btn: 'Entra amb empremta o clau', en_trust: 'Confiar en aquest dispositiu', en_trust_hint: 'Durant {d} dies sense fer-lo servir, aquí no demanarà contrasenya ni empremta. Només en un dispositiu teu; les accions importants continuaran demanant confirmació.', sec_trust_fail: 'Has entrat, però no s\'ha pogut recordar aquest dispositiu.', pk_or: 'o amb la teva contrasenya', nav_security: "Empremta i claus d'accés", sec_help: 'Només professorat i administració. La contrasenya continua funcionant sempre, encara que treguis totes les claus.', sec_off: "Les claus d'accés estan desactivades en aquest servidor (l'adreça pública no serveix per a claus). Entra amb la contrasenya i avisa qui administri el servidor.",
   });
   /* Textos del diseño nuevo (entrada, cabecera, tarjetas, avisos, diálogos). */
   Object.assign(window.I18N.es, {
@@ -89,14 +89,29 @@
   new MutationObserver(() => { cancelAnimationFrame(labelTables.raf); labelTables.raf = requestAnimationFrame(labelTables); }).observe(main, { childList: true, subtree: true });
   function showLoading() { main.setAttribute('aria-busy', 'true'); clear(main); add(main, h('div', { class: 'dc-state', role: 'status' }, h('span', { class: 'dc-spinner' }), h('p', { class: 'dc-muted' }, t('loading')))); }
   function toast(msg, err) { clear(toastEl); add(toastEl, h('div', { class: 'dc-toast' + (err ? ' err' : ''), role: err ? 'alert' : null }, ico(err ? 'alert' : 'check-circle'), h('span', null, msg))); clearTimeout(toast.t); toast.t = setTimeout(() => clear(toastEl), err ? 6000 : 3500); }
-  async function api(method, url, body) {
+  /* Confirmación reforzada (step-up): una sesión de «dispositivo de confianza» no tiene acceso reciente y las acciones sensibles piden confirmar con llave o contraseña. */
+  const SU_HDR = { 'X-Requested-With': 'historia', 'X-Passkey-Contract': '2' };
+  function askStrong() {
+    if (!window.DCStepUp) return Promise.reject(new Error('cancel'));
+    return window.DCStepUp.ask({ base: '/api/stepup', password: !ME || ME.hasPassword !== false, totp: false, passkey: !ME || ME.keys > 0, headers: SU_HDR, lang: LANG }).catch(() => { throw new Error('cancel'); });
+  }
+  async function api(method, url, body, again) {
     const r = await fetch(url, { method, credentials: 'same-origin', headers: { 'X-Requested-With': 'historia', 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
     let j = null; try { j = await r.json(); } catch (_) {}
+    if (r.status === 403 && j && j.error === 'stepup' && !again) { await askStrong(); return api(method, url, body, true); }
     if (r.status === 401 && !url.startsWith('/api/admin/login') && !url.startsWith('/api/teacher/login')) { ME = null; renderLogin(); throw new Error('auth'); }
     if (!r.ok) { const e = new Error((j && j.error) || 'error'); e.status = r.status; e.data = j; throw e; }
     return j;
   }
-  const fail = (e) => { if (e.message === 'preview') return toast(t('prev_ro'), true); if (e.message === 'day-closed') return toast(t('dy_closed'), true); if (e.message === 'last-day') return toast(t('dy_last'), true); if (e.message !== 'auth') { const k = 'e_' + String(e.message).replace(/-/g, '_'), tx = e.message ? t(k) : ''; toast(tx && tx !== k ? tx : t('err') + (e.message && e.message !== 'error' ? ' (' + e.message + ')' : ''), true); } };
+  /* descargas (informes, notas, taxonomía): en una sesión de confianza se confirma antes; el servidor lo exige igualmente */
+  document.addEventListener('click', async (ev) => {
+    const a = ev.target && ev.target.closest ? ev.target.closest('a[download]') : null;
+    if (!a || !ME || !ME.staff || !ME.trusted) return;
+    if (a.dataset.stepOk === '1') { delete a.dataset.stepOk; return; }
+    ev.preventDefault(); ev.stopPropagation();
+    try { const m = await api('GET', '/api/me'); if (!m.strong) await askStrong(); a.dataset.stepOk = '1'; a.click(); } catch (e) { fail(e); }
+  }, true);
+  const fail = (e) => { if (e.message === 'cancel') return; if (e.message === 'preview') return toast(t('prev_ro'), true); if (e.message === 'day-closed') return toast(t('dy_closed'), true); if (e.message === 'last-day') return toast(t('dy_last'), true); if (e.message !== 'auth') { const k = 'e_' + String(e.message).replace(/-/g, '_'), tx = e.message ? t(k) : ''; toast(tx && tx !== k ? tx : t('err') + (e.message && e.message !== 'error' ? ' (' + e.message + ')' : ''), true); } };
   const pad = (n) => String(n).padStart(2, '0');
   const fmtD = (s) => (s && /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4) : '');
   const fmtDT = (s) => (s ? s.slice(8, 10) + '/' + s.slice(5, 7) + ' ' + s.slice(11, 16) : '');
@@ -169,14 +184,16 @@
   /* ---------- huella y llaves de acceso (profesorado y administración) ---------- */
   const PK_HDR = { 'X-Requested-With': 'historia', 'X-Passkey-Contract': '2' };
   function mkPk() {
-    const pk = window.DCPasskey.create({ base: '/api/passkeys', lang: LANG, headers: PK_HDR, markKey: 'historia' });
+    const pk = window.DCPasskey.create({ base: '/api/passkeys', lang: LANG, headers: PK_HDR, markKey: 'historia', stepUp: askStrong });
     /* el asistente ya pide confirmación al quitar (y avisa si solo queda una llave): se manda confirm para poder quitar también la última */
-    pk.remove = async (id) => { const r = await fetch('/api/passkeys/remove', { method: 'POST', credentials: 'same-origin', headers: Object.assign({ 'Content-Type': 'application/json' }, PK_HDR), body: JSON.stringify({ id, confirm: true }) }); if (!r.ok) throw Object.assign(new Error('other'), { kind: 'other' }); pk.clearMark(); return r.json(); };
+    pk.remove = async (id) => { const go = () => fetch('/api/passkeys/remove', { method: 'POST', credentials: 'same-origin', headers: Object.assign({ 'Content-Type': 'application/json' }, PK_HDR), body: JSON.stringify({ id, confirm: true }) }); let r = await go(); if (r.status === 403) { let j = null; try { j = await r.clone().json(); } catch (_) {} if (j && j.error === 'stepup') { await askStrong(); r = await go(); } } if (!r.ok) throw Object.assign(new Error('other'), { kind: 'other' }); pk.clearMark(); return r.json(); };
     return pk;
   }
   async function viewSecurity() {
-    const j = await api('GET', '/api/passkeys/list'), sec = h('section', { class: 'dc-card', id: 'dc-llaves' });
-    show(h('h1', null, t('nav_security')), h('p', { class: 'mut' }, t('sec_help')), j.enabled && window.DCPasskeySettings ? sec : h('div', { class: 'dc-alert dc-alert--warn', role: 'status' }, ico('alert'), h('span', null, t('sec_off'))));
+    const j = await api('GET', '/api/passkeys/list'), sec = h('section', { class: 'dc-card', id: 'dc-llaves' }), trustBox = h('section', { id: 'dc-confianza' });
+    try { ME = await api('GET', '/api/me'); } catch (_) { /* se queda con lo que había */ }
+    show(h('h1', null, t('nav_security')), h('p', { class: 'mut' }, t('sec_help')), j.enabled && window.DCPasskeySettings ? sec : h('div', { class: 'dc-alert dc-alert--warn', role: 'status' }, ico('alert'), h('span', null, t('sec_off'))), trustBox);
+    if (window.DCTrustSettings) window.DCTrustSettings.mount(trustBox, { base: '/api/trust', headers: { 'X-Requested-With': 'historia' }, lang: LANG, stepUp: askStrong, onAuthLost: () => { ME = null; renderLogin(); } });
     if (j.enabled && window.DCPasskeySettings) window.DCPasskeySettings.mount(sec, { pk: mkPk(), lang: LANG });
   }
 
@@ -196,6 +213,10 @@
     const em = h('input', { class: 'dc-input', id: 'en-em', type: 'email', autocomplete: 'username', inputmode: 'email', autocapitalize: 'none', spellcheck: 'false', 'aria-describedby': 'en-em-h' });
     const eye = h('button', { class: 'dc-input-group__btn', type: 'button', 'aria-label': t('en_show'), 'aria-pressed': 'false', onclick: () => { const on = pw.type === 'password'; pw.type = on ? 'text' : 'password'; eye.setAttribute('aria-pressed', String(on)); eye.setAttribute('aria-label', on ? t('en_hide') : t('en_show')); clear(eye); eye.appendChild(ico(on ? 'eye-off' : 'eye')); pw.focus(); } }, ico('eye'));
     const go = h('button', { class: 'dc-btn dc-btn--primary dc-btn--lg dc-btn--block', type: 'submit' }, t('en_enter'));
+    /* Confiar en este dispositivo: casilla desmarcada siempre por defecto; solo si el servidor lo ofrece. Se aplica tras un acceso completo (contraseña o llave). */
+    const trustBox = h('div', { class: 'dc-entrada__trust', hidden: true }), trustIn = h('input', { type: 'checkbox', id: 'dc-trust', name: 'trust', 'aria-describedby': 'dc-trust-hint' });
+    const enrollTrust = async () => { if (!trustIn.checked) return; try { await api('POST', '/api/trust/enroll', { trust: true }); } catch (_) { toast(t('sec_trust_fail'), true); } };
+    fetch('/api/trust/state', { credentials: 'same-origin' }).then((r) => r.json()).then((st) => { if (st && st.enabled && trustBox.isConnected) { trustBox.hidden = false; clear(trustBox); add(trustBox, h('label', { class: 'dc-check', for: 'dc-trust' }, trustIn, h('span', null, h('span', { class: 'dc-entrada__trust-t' }, t('en_trust')), h('span', { class: 'dc-hint dc-entrada__trust-h', id: 'dc-trust-hint' }, t('en_trust_hint').replace('{d}', st.days))))); } }).catch(() => {});
     const note = (cls, icon, text) => { clear(msg); add(msg, h('div', { class: 'dc-alert ' + cls, role: 'alert' }, ico(icon), h('span', null, text))); };
     const clearErr = () => { pw.removeAttribute('aria-invalid'); em.removeAttribute('aria-invalid'); };
     pw.addEventListener('keyup', (e) => { caps.hidden = !(e.getModifierState && e.getModifierState('CapsLock')); });
@@ -210,7 +231,7 @@
       e.preventDefault(); clearErr();
       if (!pw.value) { note('dc-alert--danger', 'alert', t('en_pw_empty')); pw.setAttribute('aria-invalid', 'true'); pw.focus(); return; }
       go.setAttribute('aria-busy', 'true'); go.disabled = true; clear(msg);
-      try { if (em.value.trim()) await api('POST', '/api/teacher/login', { email: em.value, password: pw.value }); else await api('POST', '/api/admin/login', { password: pw.value }); await boot(); }
+      try { if (em.value.trim()) await api('POST', '/api/teacher/login', { email: em.value, password: pw.value }); else await api('POST', '/api/admin/login', { password: pw.value }); await enrollTrust(); await boot(); }
       catch (er) {
         go.removeAttribute('aria-busy'); go.disabled = false;
         if (er.status === 429) return lock((er.data && er.data.wait) || 0);
@@ -225,7 +246,7 @@
     const keyBox = h('div', { class: 'en-key' });
     const keyLogin = async (pk, btn) => {
       btn.setAttribute('aria-busy', 'true'); btn.disabled = true; clear(msg);
-      try { await pk.login({ mode: 'modal' }); await boot(); }
+      try { await pk.login({ mode: 'modal' }); await enrollTrust(); await boot(); }
       catch (er) {
         btn.removeAttribute('aria-busy'); btn.disabled = false;
         if (er && er.kind === 'nocred') pk.clearMark();
@@ -250,7 +271,7 @@
       h('div', { class: 'dc-entrada__card en-card' },
         h('h2', { class: 'dc-entrada__title', tabindex: '-1' }, t('login_title')), h('p', { class: 'dc-entrada__lead' }, t('en_campus_lead')),
         h('a', { class: 'dc-btn dc-btn--primary dc-btn--lg dc-btn--block', href: 'https://campus.luisfs.com' }, ico('graduation'), t('en_campus_btn')),
-        h('details', { id: 'en-staff' }, h('summary', null, ico('lock'), t('en_staff')), h('div', { class: 'dc-stack' }, keyBox, h('p', { class: 'dc-muted dc-small' }, t('en_staff_help')), f))),
+        h('details', { id: 'en-staff' }, h('summary', null, ico('lock'), t('en_staff')), h('div', { class: 'dc-stack' }, keyBox, h('p', { class: 'dc-muted dc-small' }, t('en_staff_help')), trustBox, f))),
       h('p', { class: 'dc-entrada__foot' }, t('en_note'))));
   }
 

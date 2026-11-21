@@ -76,3 +76,9 @@
   .dc-entrada__app { font-size: var(--dc-fs-lg); }
   .dc-pad__key { min-height: 3.5rem; }
 }
+
+/* Confiar en este dispositivo: casilla bajo el título, desmarcada por defecto, con la caducidad a la vista */
+.dc-entrada__trust { padding: var(--dc-s-2) var(--dc-s-4); border: 1px solid var(--dc-border); border-radius: var(--dc-r-md); background: var(--dc-surface-2); }
+.dc-entrada__trust .dc-check { padding: .35rem 0; }
+.dc-entrada__trust-t { display: block; font-weight: var(--dc-fw-semibold); }
+.dc-entrada__trust-h { display: block; margin-top: .1rem; }

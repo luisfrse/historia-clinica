@@ -1,6 +1,6 @@
 {
   "origen": "diseno-comun",
-  "commit": "9fc041f",
+  "commit": "c9a6490",
   "ficheros": {
     "tokens.css": "7c81051d6a5a1dd6",
     "base.css": "4a017b551b787ae6",
@@ -11,9 +11,11 @@
     "fuentes/bricolage-latin-ext.woff2": "776f6dcaf03636cd",
     "fuentes/sourcesans3-latin.woff2": "19143dca075972bc",
     "fuentes/sourcesans3-latin-ext.woff2": "a85a7459bdb3cdc1",
-    "iconos/iconos.js": "fec5fc24ad37b717",
-    "entrada/entrada.css": "42746375ccb5eae6",
-    "entrada/passkey.js": "c79f0fd0dab5e880",
-    "entrada/ajustes-llaves.js": "437b635848889085"
+    "iconos/iconos.js": "05942e8a3e7e335b",
+    "entrada/entrada.css": "ca957bd8c5c98c4b",
+    "entrada/passkey.js": "78b57019f9f2cf2e",
+    "entrada/ajustes-llaves.js": "437b635848889085",
+    "entrada/confianza.js": "b3d0c3cdddb51fe1",
+    "lib/dc/confianza.cjs": "cab4da26cdaab550"
   }
 }

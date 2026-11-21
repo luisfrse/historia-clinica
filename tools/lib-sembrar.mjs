@@ -71,5 +71,5 @@ export async function arrancar() {
   if (mid) await call('POST', '/api/records/' + mid.id + '/void', { reason: 'Error de transcripción: eran 450 ml.' }, ck.marta);
 
   const stop = async () => { try { srv.kill(); } catch { /* ya parado */ } await sleep(300); try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* Windows retiene el fichero un momento */ } };
-  return { base, port, call, ssoUrl, login, admin, adminPw, ck, ids, charts, pid, consId, personas, stop, log: () => out };
+  return { base, port, dir, call, ssoUrl, login, admin, adminPw, ck, ids, charts, pid, consId, personas, stop, log: () => out };
 }

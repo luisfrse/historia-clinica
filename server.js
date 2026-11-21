@@ -17,7 +17,11 @@ const SSO_SECRET = process.env.SSO_SECRET || '';
 const CAMPUS_URL = (process.env.CAMPUS_URL || 'https://campus.luisfs.com').replace(/\/+$/, '');
 const CAMPUS_TOKEN = process.env.CAMPUS_TOKEN || '';
 const PUB = path.join(__dirname, 'public');
+const { createTrust, requireStrong } = require('./lib/dc/confianza.cjs');
 const TTL = 10 * 3600e3;
+const STRONG_MS = 10 * 60e3;   // «acceso reciente»: lo que dura una confirmación reforzada (contraseña o llave)
+const TRUST_DAYS = Math.max(1, Math.min(365, parseInt(process.env.HC_TRUST_DAYS, 10) || 14));   // «Confiar en este dispositivo» (profesorado y administración): días sin uso hasta que caduca
+const TRUST_ON = process.env.HC_TRUST !== '0';   // HC_TRUST=0 lo apaga: no se crea ni se acepta ningún token
 
 const db = open(DATA_DIR);
 CAT.seedCatalog(db);
@@ -46,9 +50,10 @@ const csrfOk = (req) => {
 };
 
 /* ---------- sesiones y auditoría ---------- */
-function newSession(uid) {
-  const tok = crypto.randomBytes(32).toString('base64url');
-  db.run('INSERT INTO sessions (hash, user_id, exp) VALUES (?,?,?)', U.sha(tok), uid, Date.now() + TTL);
+/* Una sesión de acceso completo nace «reciente» (strong_until). Una de confianza ({ trusted, trustId }) nace sin acceso reciente y no se desliza (caduca a las TTL). */
+function newSession(uid, o) {
+  o = o || {}; const tok = crypto.randomBytes(32).toString('base64url'), t = Date.now();
+  db.run('INSERT INTO sessions (hash, user_id, exp, trusted, trust_id, strong_until) VALUES (?,?,?,?,?,?)', U.sha(tok), uid, t + TTL, o.trusted ? 1 : 0, o.trustId || null, o.trusted ? 0 : t + STRONG_MS);
   return tok;
 }
 function userOf(req) {
@@ -59,14 +64,31 @@ function userOf(req) {
   const real = db.get('SELECT * FROM users WHERE id = ? AND active = 1', s.user_id) || null;
   if (real && s.as_user && isStaff(real)) {
     const as = db.get('SELECT * FROM users WHERE id = ? AND active = 1', s.as_user);
-    if (as) return Object.assign({}, as, { _preview: true, _real: real.email });
+    if (as) return Object.assign({}, as, { _preview: true, _real: real.email, _sess: s });
   }
+  if (real) real._sess = s;
   return real;
 }
 const isStaff = (u) => !!u && (u.role === 'admin' || u.role === 'teacher');
 function audit(who, action, detail) { db.run('INSERT INTO audit (ts, who, action, detail) VALUES (?,?,?,?)', new Date().toISOString(), who, action, U.clip(detail || '', 300)); }
 function purge() { db.run('DELETE FROM sessions WHERE exp < ?', Date.now()); db.run('DELETE FROM sso_used WHERE exp < ?', Date.now()); }
 purge(); setInterval(purge, 3600e3).unref();
+
+/* Dispositivo de confianza (diseno-comun/docs/dispositivo-confianza.md): solo para profesorado y administración. El módulo no sabe de cuentas: la tabla dc_trust_user
+   liga cada dispositivo a su cuenta, y cada cuenta solo ve y revoca los suyos. El alumnado no lo usa nunca. */
+const trust = createTrust({ db, days: TRUST_DAYS, absoluteDays: Math.min(365, TRUST_DAYS * 4), cookieName: '__Host-hc-trust', secure: true, disabled: () => !TRUST_ON,
+  audit: (action, detail) => audit('confianza', action, detail),
+  onRevoke: (ids) => { for (const id of ids) { db.run('DELETE FROM sessions WHERE trust_id = ?', id); db.run('DELETE FROM dc_trust_user WHERE trust_id = ?', id); } } });
+trust.watchSecret('contraseña', ADMIN_PASSWORD);   // si cambia ADMIN_PASSWORD entre arranques, se revoca todo
+const revokeUserTrust = (uid) => { for (const r of db.all('SELECT trust_id FROM dc_trust_user WHERE user_id = ?', uid)) trust.revoke(r.trust_id); };
+/* acciones sensibles: en una sesión de confianza piden confirmar con contraseña o llave (10 min); una sesión de acceso completo se comporta como siempre */
+const STRONG_ROUTES = [
+  ['GET', /^\/api\/patients\/[^/]+\/case\.pdf$/], ['GET', /^\/api\/students\/[^/]+\/report\.pdf$/], ['GET', /^\/api\/reports\.zip$/], ['GET', /^\/api\/grades\.csv$/], ['GET', /^\/api\/taxonomy\.csv$/],
+  ['DELETE', /^\/api\/charts\/[^/]+$/], ['POST', /^\/api\/patients\/[^/]+\/delete$/], ['POST', /^\/api\/cleanup$/],
+  ['POST', /^\/api\/teachers$/], ['DELETE', /^\/api\/teachers\/[^/]+$/], ['PUT', /^\/api\/users\/[^/]+$/],
+  ['POST', /^\/api\/passkeys\/(register\/options|register\/verify|remove)$/],
+];
+const needsStrong = (method, pathname) => STRONG_ROUTES.some(([m, re]) => m === method && re.test(pathname));
 
 const limLogin = U.limiter(8, 15 * 60e3);
 const limSso = U.limiter(30, 60e3);
@@ -216,14 +238,18 @@ R('POST', '/api/teacher/login', async (req, res) => {
   json(res, 200, { ok: true }, { 'Set-Cookie': setCookie(req, newSession(u.id), TTL / 1000) });
 }, { open: true });
 /* huellas y llaves de acceso del profesorado y la administración (WebAuthn); el alumnado no las usa. La contraseña sigue siendo la salida. */
-require('./lib/passkeys')({ R, db, json, readJson, audit, newSession, setCookie, ipOf, limLogin, isStaff, SESSION_TTL: TTL, PUBLIC_URL: process.env.PUBLIC_URL || 'https://historia.luisfs.com' });
+require('./lib/passkeys')({ R, db, json, readJson, audit, newSession, setCookie, ipOf, limLogin, isStaff, SESSION_TTL: TTL, markStrong: (req) => db.run('UPDATE sessions SET strong_until = ? WHERE hash = ?', Date.now() + STRONG_MS, U.sha(cookies(req).hid || '')), PUBLIC_URL: process.env.PUBLIC_URL || 'https://historia.luisfs.com' });
 R('POST', '/api/logout', async (req, res) => {
   const tok = cookies(req).hid; if (tok) db.run('DELETE FROM sessions WHERE hash = ?', U.sha(tok));
-  json(res, 200, { ok: true }, { 'Set-Cookie': setCookie(req, '', 0) });
-});
+  trust.revokeCurrent(req.headers.cookie);   // salir de forma explícita también quita la confianza de este dispositivo
+  json(res, 200, { ok: true }, { 'Set-Cookie': [setCookie(req, '', 0), trust.clearCookie()] });
+}, { open: true });
+/* dispositivos de confianza, confirmación reforzada (step-up) y estado público de la casilla */
+require('./lib/trust-hc')({ R, db, json, readJson, audit, trust, isStaff, ipOf, limLogin, pwCheck, cookies, U, ADMIN_PASSWORD, enabled: TRUST_ON, days: TRUST_DAYS, STRONG_MS });
 R('GET', '/api/me', async (req, res, ctx) => {
   const u = ctx.user;
-  json(res, 200, { id: u.id, name: u.name, email: u.email, role: u.role, profile: u.profile, lang: u.lang, campus: CAMPUS_URL, staff: isStaff(u), preview: !!u._preview });
+  json(res, 200, { id: u.id, name: u.name, email: u.email, role: u.role, profile: u.profile, lang: u.lang, campus: CAMPUS_URL, staff: isStaff(u), preview: !!u._preview,
+    trusted: !!(u._sess && u._sess.trusted), strong: !!(u._sess && u._sess.strong_until > Date.now()), hasPassword: u.role === 'admin' ? !!ADMIN_PASSWORD : !!u.pw, keys: isStaff(u) && !u._preview ? db.get('SELECT COUNT(*) n FROM staff_passkeys WHERE user_id = ?', u.id).n : 0 });
 });
 R('PUT', '/api/me', async (req, res, ctx) => {
   const b = await readJson(req, 2e3);
@@ -378,7 +404,7 @@ R('PUT', '/api/users/:id', async (req, res, ctx) => {
   const b = await readJson(req, 2e3);
   if (CAT.PROFILES.includes(b.profile)) db.run('UPDATE users SET profile = ?, profile_manual = 1 WHERE id = ?', b.profile, u.id);
   if (b.profile === 'auto') db.run('UPDATE users SET profile_manual = 0 WHERE id = ?', u.id);
-  if (b.active != null) db.run('UPDATE users SET active = ? WHERE id = ?', b.active ? 1 : 0, u.id);
+  if (b.active != null) { db.run('UPDATE users SET active = ? WHERE id = ?', b.active ? 1 : 0, u.id); if (!b.active) revokeUserTrust(u.id); }
   audit(ctx.user.email, 'usuario-edicion', u.email + ' ' + (b.profile || '') + (b.active != null ? ' activo=' + b.active : ''));
   json(res, 200, { ok: true });
 }, { staff: true });
@@ -858,14 +884,14 @@ R('POST', '/api/teachers', async (req, res, ctx) => {
   if (pw.length < 10) return bad(res, 'La contraseña debe tener al menos 10 caracteres.');
   const ex = db.get('SELECT * FROM users WHERE email = ?', email);
   if (ex && ex.role !== 'teacher') return bad(res, 'Ese correo ya existe como alumnado o administración.', 409);
-  if (ex) db.run('UPDATE users SET name = ?, pw = ?, active = 1 WHERE id = ?', name, pwHash(pw), ex.id);
+  if (ex) { db.run('UPDATE users SET name = ?, pw = ?, active = 1 WHERE id = ?', name, pwHash(pw), ex.id); revokeUserTrust(ex.id); }   /* contraseña nueva: los dispositivos de confianza de esa cuenta dejan de valer */
   else db.run("INSERT INTO users (email, name, role, profile, lang, subjects, pw, created) VALUES (?,?,'teacher','enfermeria','es','[]',?,?)", email, name, pwHash(pw), new Date().toISOString());
   audit(ctx.user.email, 'profesorado-alta', email); json(res, 200, { ok: true });
 }, { staff: true });
 R('DELETE', '/api/teachers/:id', async (req, res, ctx) => {
   if (ctx.user.role !== 'admin') return bad(res, 'forbidden', 403);
   const u = db.get("SELECT * FROM users WHERE id = ? AND role = 'teacher'", intId(ctx.params.id)); if (!u) return bad(res, 'notfound', 404);
-  db.run('UPDATE users SET active = 0, pw = NULL WHERE id = ?', u.id); db.run('DELETE FROM sessions WHERE user_id = ?', u.id); db.run('DELETE FROM staff_passkeys WHERE user_id = ?', u.id);
+  db.run('UPDATE users SET active = 0, pw = NULL WHERE id = ?', u.id); db.run('DELETE FROM sessions WHERE user_id = ?', u.id); db.run('DELETE FROM staff_passkeys WHERE user_id = ?', u.id); revokeUserTrust(u.id);
   audit(ctx.user.email, 'profesorado-baja', u.email); json(res, 200, { ok: true });
 }, { staff: true });
 
@@ -972,6 +998,23 @@ function serveStatic(req, res, pathname) {
   res.writeHead(200, hdrs({ 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': path.extname(file) === '.woff2' ? 'public, max-age=2592000' : 'no-cache' }));
   fs.createReadStream(file).pipe(res);
 }
+function restoreTrusted(req, res) {
+  const tr = trust.restore({ cookie: req.headers.cookie, ua: req.headers['user-agent'], ip: ipOf(req) }), out = [];
+  if (tr.clearCookie) out.push(tr.clearCookie);
+  if (tr.ok) {
+    const own = db.get('SELECT user_id FROM dc_trust_user WHERE trust_id = ?', tr.id);
+    const u = own && db.get("SELECT * FROM users WHERE id = ? AND active = 1 AND role IN ('teacher','admin')", own.user_id);
+    if (u) {
+      const tok = newSession(u.id, { trusted: true, trustId: tr.id });
+      req.headers.cookie = String(req.headers.cookie || '').split(';').filter((c) => c.trim().split('=')[0] !== 'hid').concat('hid=' + tok).join(';');
+      out.length = 0; out.push(setCookie(req, tok, TTL / 1000)); if (tr.setCookie) out.push(tr.setCookie);
+      res.setHeader('Set-Cookie', out); return userOf(req);
+    }
+    trust.revoke(tr.id); out.length = 0; out.push(trust.clearCookie());   // dispositivo sin cuenta válida (dada de baja o no es de profesorado): fuera
+  }
+  if (out.length) res.setHeader('Set-Cookie', out);
+  return null;
+}
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://x'); const pathname = url.pathname;
@@ -986,7 +1029,9 @@ const server = http.createServer(async (req, res) => {
       const ctx = { url, params, user: null };
       if (!r.open) {
         ctx.user = userOf(req);
+        if (!ctx.user) ctx.user = restoreTrusted(req, res);   // sin sesión pero con la cookie de confianza: se abre una sesión de confianza y se rota el token
         if (!ctx.user) { req.resume(); return json(res, 401, { error: 'auth' }); }
+        if (ctx.user._sess && ctx.user._sess.trusted && needsStrong(req.method, pathname) && requireStrong({ trusted: true, strongUntil: ctx.user._sess.strong_until, now: Date.now() })) { req.resume(); return json(res, 403, { error: 'stepup' }); }
         if (r.staff && !isStaff(ctx.user)) { req.resume(); return json(res, 403, { error: 'forbidden' }); }
       }
       if (ctx.user && ctx.user._preview && req.method !== 'GET' && pathname !== '/api/preview/exit' && pathname !== '/api/logout') { req.resume(); return json(res, 403, { error: 'preview' }); }

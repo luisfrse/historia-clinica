@@ -36,6 +36,7 @@
       network: ['Sin conexión con el servidor', 'Comprueba la conexión y vuelve a intentarlo.'],
       unsupported: ['Este navegador no admite llaves', 'Prueba con Chrome, Edge, Safari o Firefox actualizados; mientras tanto, entra con la contraseña.'],
       notdiscoverable: ['La llave se creó, pero no sirve para entrar sin escribir usuario', 'Tu dispositivo ha guardado una llave que el sistema no puede ofrecer al abrir la app (suele pasar con llaves físicas antiguas). Quítala y usa la huella del móvil u ordenador, o una llave con almacenamiento de passkeys.'],
+      tip: "En el móvil, si el selector muestra un gestor de contraseñas (NordPass u otro) en vez de la huella del dispositivo, elige la opción de este dispositivo o de Google. Si no aparece, actívala en los ajustes de Android (Contraseñas, llaves de acceso y cuentas › Servicio preferido).",
       other: ['No se pudo usar la llave', 'Algo ha fallado. Inténtalo de nuevo; si sigue igual, entra con la contraseña.']
     },
     ca: {
@@ -53,6 +54,7 @@
       network: ['Sense connexió amb el servidor', 'Comprova la connexió i torna-ho a provar.'],
       unsupported: ['Aquest navegador no admet claus', 'Prova amb Chrome, Edge, Safari o Firefox actualitzats; mentrestant, entra amb la contrasenya.'],
       notdiscoverable: ['La clau s’ha creat, però no serveix per entrar sense escriure usuari', 'El teu dispositiu ha guardat una clau que el sistema no pot oferir en obrir l’app (passa amb claus físiques antigues). Treu-la i fes servir l’empremta del mòbil o de l’ordinador.'],
+      tip: "Al mòbil, si el selector mostra un gestor de contrasenyes (NordPass o un altre) en lloc de l’empremta del dispositiu, tria l’opció d’aquest dispositiu o de Google. Si no apareix, activa-la als ajustos d’Android (Contrasenyes, claus d’accés i comptes › Servei preferit).",
       other: ['No s’ha pogut fer servir la clau', 'Alguna cosa ha fallat. Torna-ho a provar; si continua igual, entra amb la contrasenya.']
     },
     en: {
@@ -70,6 +72,7 @@
       network: ['No connection to the server', 'Check your connection and try again.'],
       unsupported: ['This browser does not support passkeys', 'Try an up-to-date Chrome, Edge, Safari or Firefox; meanwhile sign in with your password.'],
       notdiscoverable: ['The key was created but cannot sign you in without a username', 'Your device stored a key the system cannot offer when the app opens (common with old security keys). Remove it and use your phone or computer fingerprint instead.'],
+      tip: "On a phone, if the chooser shows a password manager (NordPass or another) instead of the device fingerprint, pick this device or Google. If it is missing, enable it in Android settings (Passwords, passkeys and accounts › Preferred service).",
       other: ['Could not use the key', 'Something went wrong. Try again; if it keeps failing, sign in with your password.']
     }
   };
@@ -89,7 +92,12 @@
     var markKey = 'dc-pk:' + (cfg.markKey || location.host), current = null;
 
     /* ---- red ---- */
+    /* cfg.stepUp: si el servidor responde 403 «stepup» (sesión de confianza sin acceso reciente), se pide la confirmación y se repite UNA vez (docs/dispositivo-confianza.md) */
     async function call(path, body, method) {
+      try { return await call0(path, body, method); }
+      catch (e) { if (e && e.code === 'stepup' && typeof cfg.stepUp === 'function') { try { await cfg.stepUp(); } catch (_) { throw PKError('abort'); } return call0(path, body, method); } throw e; }
+    }
+    async function call0(path, body, method) {
       if (cfg.request) return cfg.request(path, body, method, base);       // la app puede aportar su propio cliente (p. ej. con confirmación reforzada)
       var hdr = Object.assign({}, cfg.headers || {}), res, data = {};
       try {
@@ -140,11 +148,19 @@
     }
     function explain(e, ctx) {
       var k = e && e.kind || 'other'; var t = TT[k] || TT.other;
-      return { kind: k, title: t[0], text: t[1], silent: k === 'abort', retry: k === 'cancelled' || k === 'timeout' || k === 'gesture' || k === 'challenge' || k === 'network' || k === 'other', wait: e && e.wait };
+      var android = /Android/.test(navigator.userAgent || '') && (k === 'cancelled' || k === 'timeout' || k === 'nocred' || k === 'other');
+      return { kind: k, title: t[0], text: t[1], tip: android ? TT.tip : '', silent: k === 'abort', retry: k === 'cancelled' || k === 'timeout' || k === 'gesture' || k === 'challenge' || k === 'network' || k === 'other', wait: e && e.wait };
     }
 
     /* ---- opciones del navegador a partir de las del servidor ---- */
-    function reqOpts(o) { var pk = Object.assign({}, o, { challenge: b64.dec(o.challenge) }); if (o.allowCredentials) pk.allowCredentials = o.allowCredentials.map(desc); return pk; }
+    /* hints: «client-device» pide al navegador que ponga primero el autenticador del propio dispositivo (huella, Windows Hello, Face ID) y no el cuadro de «usa un móvil/una llave».
+       Los navegadores que no lo conocen lo ignoran. Solo en el cuadro modal (en autorrelleno no pinta nada). Tras un «no hay llave aquí» se quita una vez para dejar elegir otro dispositivo. */
+    var noHints = false;
+    function reqOpts(o, mode) {
+      var pk = Object.assign({}, o, { challenge: b64.dec(o.challenge) }); if (o.allowCredentials) pk.allowCredentials = o.allowCredentials.map(desc);
+      if (mode !== 'conditional' && cfg.hints !== false && !noHints && !pk.hints) pk.hints = cfg.hints || ['client-device'];
+      return pk;
+    }
     function createOpts(o) {
       var pk = Object.assign({}, o, { challenge: b64.dec(o.challenge), user: Object.assign({}, o.user, { id: b64.dec(o.user.id) }) });
       if (o.excludeCredentials) pk.excludeCredentials = o.excludeCredentials.map(desc);
@@ -155,21 +171,46 @@
     function attestationJSON(c) { var r = c.response; return { id: c.id, rawId: b64.enc(c.rawId), type: c.type, authenticatorAttachment: c.authenticatorAttachment || undefined, clientExtensionResults: c.getClientExtensionResults ? c.getClientExtensionResults() : {}, response: { clientDataJSON: b64.enc(r.clientDataJSON), attestationObject: b64.enc(r.attestationObject), transports: r.getTransports ? r.getTransports() : [] } }; }
     function rpCheck(o) { var rp = o && (o.rpId || (o.rp && o.rp.id)); if (rp && !(location.hostname === rp || location.hostname.endsWith('.' + rp))) throw PKError('rpid', null, { rpId: rp, host: location.hostname }); }
 
+    /* ---- reto precargado ----
+       Causa medida de la lentitud: al pulsar «Entrar con huella» se pedía al servidor el reto DENTRO del clic y solo después se llamaba a WebAuthn
+       (una ida y vuelta de red de 20-300 ms, más con datos móviles, antes de que el sistema pudiera abrir nada).
+       Ahora el reto y las opciones se piden al pintar la pantalla (prepare) y al pulsar se llama a navigator.credentials.get SIN ningún await previo.
+       El reto sirve mientras no se haya enviado una aserción al servidor: si el cuadro se cancela o falla, se reutiliza; se renueva antes de los 5 min del servidor. */
+    var tickets = {}, TTL = cfg.prepareTtl || 4 * 60 * 1000, renewals = {}, MAXREN = 3, lastTiming = {};
+    var optPath = function (purpose) { return purpose === 'check' ? P.checkOptions : P.loginOptions; };
+    var fresh = function (t) { return t && !t.dead && Date.now() - t.at < TTL; };
+    function drop(purpose) { var t = tickets[purpose]; if (t) { t.dead = true; clearTimeout(t.timer); } delete tickets[purpose]; }
+    function prepare(purpose) {
+      purpose = purpose || 'login'; var cur = tickets[purpose]; if (fresh(cur)) return cur.p;
+      if (cur) clearTimeout(cur.timer);
+      var t = { at: Date.now(), value: null, dead: false, timer: null }, t0 = Date.now(); tickets[purpose] = t;
+      t.p = call(optPath(purpose), {}).then(function (raw) { t.value = unwrap(raw); t.ms = Date.now() - t0; return t.value; }, function (e) { if (tickets[purpose] === t) delete tickets[purpose]; t.dead = true; t.error = e; return null; });
+      /* renovación silenciosa mientras la pantalla siga abierta y visible (máximo 3 veces: una pestaña olvidada no pregunta al servidor para siempre) */
+      t.timer = setTimeout(function () { if (tickets[purpose] === t && !document.hidden && (renewals[purpose] = (renewals[purpose] || 0) + 1) <= MAXREN) prepare(purpose); }, TTL - 30000);
+      return t.p;
+    }
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', function () { if (!document.hidden && tickets.login && !fresh(tickets.login) && (renewals.login || 0) <= MAXREN) prepare('login'); });
+
     /* ---- entrar ---- */
     /* mode: 'modal' (botón), 'auto' (al cargar) o 'conditional' (autorrelleno). purpose: 'login' | 'check'. */
     async function login(o) {
-      o = o || {}; var mode = o.mode || 'modal', purpose = o.purpose || 'login', retried = false;
+      o = o || {}; var mode = o.mode || 'modal', purpose = o.purpose || 'login', retried = false, tStart = Date.now();
       if (!supported()) throw PKError('unsupported');
       var c = begin(mode === 'conditional' ? 'conditional' : 'modal');
       try {
         for (;;) {
-          var r = unwrap(await call(purpose === 'check' ? P.checkOptions : P.loginOptions, {})), opts = r.options; rpCheck(opts);
+          var tk = tickets[purpose], r = fresh(tk) && tk.value, pre = !!r;
+          if (!r) r = (await prepare(purpose)) || unwrap(await call(optPath(purpose), {}));   // camino lento; si la precarga falló, se repite para devolver el error real (429, sin llaves…)
+          var opts = r.options; rpCheck(opts);
           var t0 = Date.now(), cred;
-          try { cred = await navigator.credentials.get({ publicKey: reqOpts(opts), signal: c.ctrl.signal, mediation: mode === 'conditional' ? 'conditional' : undefined }); }
-          catch (e) { throw classify(e, { op: 'login', mode: mode, t0: t0, timeout: opts.timeout, signal: c.ctrl.signal }); }
+          lastTiming = { prepared: pre, optionsMs: pre ? 0 : Date.now() - tStart, mode: mode };
+          try { cred = await navigator.credentials.get({ publicKey: reqOpts(opts, mode), signal: c.ctrl.signal, mediation: mode === 'conditional' ? 'conditional' : undefined }); }
+          catch (e) { var ce = classify(e, { op: 'login', mode: mode, t0: t0, timeout: opts.timeout, signal: c.ctrl.signal }); if (ce.kind === 'nocred' && !noHints) noHints = true; throw ce; }
+          lastTiming.getMs = Date.now() - t0;
           if (!cred) throw PKError('cancelled');
+          drop(purpose);                                                      // el reto se gasta en cuanto se envía la aserción
           try { var out = await call(purpose === 'check' ? P.checkVerify : P.loginVerify, wrapVerify(r.chal, assertionJSON(cred))); }
-          catch (e) { if (e.kind === 'challenge' && !retried && mode !== 'conditional') { retried = true; continue; } throw e; }
+          catch (e) { if (e.kind === 'challenge' && !retried && mode !== 'conditional') { retried = true; continue; } if (mode !== 'conditional' && !document.hidden) prepare(purpose); throw e; }
           if (purpose === 'login') setMark();
           out = out || {}; out.credentialId = cred.id; return out;
         }
@@ -190,7 +231,7 @@
       o = o || {}; if (!supported()) throw PKError('unsupported');
       var c = begin('register');
       try {
-        var r = unwrap(await call(P.registerOptions, {})), opts = r.options; rpCheck(opts);
+        tickets = {}; var r = unwrap(await call(P.registerOptions, {})), opts = r.options; rpCheck(opts);
         var t0 = Date.now(), cred;
         try { cred = await navigator.credentials.create({ publicKey: createOpts(opts), signal: c.ctrl.signal }); }
         catch (e) { throw classify(e, { op: 'register', t0: t0, timeout: opts.timeout, signal: c.ctrl.signal }); }
@@ -210,7 +251,7 @@
     var remove = function (id) { return call(P.remove, { id: id }); };
     function describeDevice() { var ua = navigator.userAgent || '', p = (navigator.userAgentData && navigator.userAgentData.platform) || ''; var n = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android' : /Windows/.test(p + ua) ? 'Windows' : /Mac/.test(p + ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : 'Este dispositivo'; var b = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : ''; return b ? n + ' · ' + b : n; }
 
-    return { supported: supported, platformAvailable: platformAvailable, conditionalAvailable: conditionalAvailable, hasMark: hasMark, setMark: setMark, clearMark: clearMark, login: login, startConditional: startConditional, auto: auto, register: register, verifyNow: verifyNow, list: list, remove: remove, cancel: cancelAll, explain: explain, describeDevice: describeDevice, text: TT };
+    return { supported: supported, platformAvailable: platformAvailable, conditionalAvailable: conditionalAvailable, hasMark: hasMark, setMark: setMark, clearMark: clearMark, login: login, prepare: prepare, timing: function () { return lastTiming; }, startConditional: startConditional, auto: auto, register: register, verifyNow: verifyNow, list: list, remove: remove, cancel: cancelAll, explain: explain, tipText: function () { return TT.tip; }, describeDevice: describeDevice, text: TT };
   }
   root.DCPasskey = { create: create, TXT: TXT, b64: b64 };
 })(typeof window !== 'undefined' ? window : globalThis);
