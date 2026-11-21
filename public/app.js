@@ -3,6 +3,12 @@
   const main = document.getElementById('main'), top = document.getElementById('top'), toastEl = document.getElementById('toast'), navEl = document.getElementById('nav'), shell = document.getElementById('shell');
   let ME = null, LANG = (navigator.language || 'es').startsWith('ca') ? 'ca' : 'es', chartKey = 0, chartUser = '', loadTimer = 0, tickTimer = 0;
 
+  Object.assign(window.I18N.es, {
+    pk_btn: 'Entrar con huella o llave', pk_or: 'o con tu contraseña', nav_security: 'Huella y llaves de acceso', sec_help: 'Solo profesorado y administración. La contraseña sigue funcionando siempre, aunque quites todas las llaves.', sec_off: 'Las llaves de acceso están desactivadas en este servidor (la dirección pública no sirve para llaves). Entra con la contraseña y avisa a quien administre el servidor.',
+  });
+  Object.assign(window.I18N.ca, {
+    pk_btn: 'Entra amb empremta o clau', pk_or: 'o amb la teva contrasenya', nav_security: "Empremta i claus d'accés", sec_help: 'Només professorat i administració. La contrasenya continua funcionant sempre, encara que treguis totes les claus.', sec_off: "Les claus d'accés estan desactivades en aquest servidor (l'adreça pública no serveix per a claus). Entra amb la contrasenya i avisa qui administri el servidor.",
+  });
   /* Textos del diseño nuevo (entrada, cabecera, tarjetas, avisos, diálogos). */
   Object.assign(window.I18N.es, {
     theme: 'Tema', theme_auto: 'automático', theme_dark: 'oscuro', theme_light: 'claro', theme_change: 'Cambiar tema (ahora {m})', lang_to: 'Cambiar idioma', go_home: 'Ir al inicio', menu_main: 'Secciones',
@@ -145,6 +151,7 @@
     if (ME) add(acts, h('span', { class: 'dc-header__who' }, ME.name));
     const seg = location.hash.replace(/^#\/?/, '').split('/')[0];
     const cur = seg === 'students' || seg === 'student' || seg === 'catalog' || seg === 'taxonomy' || seg === 'audit' || seg === 'grades' || seg === 'help' ? (seg === 'student' ? 'students' : seg === 'taxonomy' ? 'catalog' : seg) : 'home';
+    if (ME && ME.staff) add(acts, h('a', { class: 'dc-btn dc-btn--ghost dc-btn--icon', href: '#/security', 'aria-label': t('nav_security'), title: t('nav_security'), 'aria-current': seg === 'security' ? 'page' : null }, ico('fingerprint')));
     if (ME) add(acts, h('a', { class: 'dc-btn dc-btn--ghost dc-btn--icon', href: '#/help', 'aria-label': t('nav_help'), title: t('nav_help'), 'aria-current': cur === 'help' ? 'page' : null }, ico('life-buoy')));
     const th = window.HCTheme ? window.HCTheme.get() : 'auto';
     add(acts, btn(ico(THEME_ICON[th]), t('theme_change').replace('{m}', t('theme_' + th)), () => { window.HCTheme.next(); renderTop(); }));
@@ -158,6 +165,20 @@
     if (ME && ME.preview) top.after(h('div', { id: 'prevbar', class: 'prevbar', role: 'status' }, h('span', null, t('prev_ro')), h('button', { class: 'sm', onclick: async () => { try { await api('POST', '/api/preview/exit'); await boot(); location.hash = '#/'; } catch (e) { fail(e); } } }, t('prev_exit'))));
   }
   function switchLang() { LANG = LANG === 'es' ? 'ca' : 'es'; document.documentElement.lang = LANG; if (ME) api('PUT', '/api/me', { lang: LANG }).catch(() => {}); renderTop(); ME ? route() : renderLogin(); }
+
+  /* ---------- huella y llaves de acceso (profesorado y administración) ---------- */
+  const PK_HDR = { 'X-Requested-With': 'historia', 'X-Passkey-Contract': '2' };
+  function mkPk() {
+    const pk = window.DCPasskey.create({ base: '/api/passkeys', lang: LANG, headers: PK_HDR, markKey: 'historia' });
+    /* el asistente ya pide confirmación al quitar (y avisa si solo queda una llave): se manda confirm para poder quitar también la última */
+    pk.remove = async (id) => { const r = await fetch('/api/passkeys/remove', { method: 'POST', credentials: 'same-origin', headers: Object.assign({ 'Content-Type': 'application/json' }, PK_HDR), body: JSON.stringify({ id, confirm: true }) }); if (!r.ok) throw Object.assign(new Error('other'), { kind: 'other' }); pk.clearMark(); return r.json(); };
+    return pk;
+  }
+  async function viewSecurity() {
+    const j = await api('GET', '/api/passkeys/list'), sec = h('section', { class: 'dc-card', id: 'dc-llaves' });
+    show(h('h1', null, t('nav_security')), h('p', { class: 'mut' }, t('sec_help')), j.enabled && window.DCPasskeySettings ? sec : h('div', { class: 'dc-alert dc-alert--warn', role: 'status' }, ico('alert'), h('span', null, t('sec_off'))));
+    if (j.enabled && window.DCPasskeySettings) window.DCPasskeySettings.mount(sec, { pk: mkPk(), lang: LANG });
+  }
 
   /* ---------- pantalla de entrada ---------- */
   /* Tres caminos, los de siempre: Campus (alumnado y profesorado), profesorado con correo y contraseña, administración con su contraseña
@@ -200,6 +221,28 @@
     } },
       h('div', { class: 'dc-field' }, h('label', { class: 'dc-label', for: 'en-em' }, t('en_email')), em, h('p', { class: 'dc-hint', id: 'en-em-h' }, t('en_email_hint'))),
       h('div', { class: 'dc-field' }, h('label', { class: 'dc-label', for: 'en-pw' }, t('en_pw')), h('div', { class: 'dc-input-group' }, pw, eye), caps), msg, go);
+    /* Entrar con huella o llave: solo se ofrece si el navegador la admite y el servidor ya tiene alguna llave. La contraseña de abajo es siempre la salida. */
+    const keyBox = h('div', { class: 'en-key' });
+    const keyLogin = async (pk, btn) => {
+      btn.setAttribute('aria-busy', 'true'); btn.disabled = true; clear(msg);
+      try { await pk.login({ mode: 'modal' }); await boot(); }
+      catch (er) {
+        btn.removeAttribute('aria-busy'); btn.disabled = false;
+        if (er && er.kind === 'nocred') pk.clearMark();
+        const x = er && er.kind ? pk.explain(er) : { silent: false, kind: 'other', title: '', text: t('en_err') };
+        if (x.silent) return;
+        note(x.kind === 'cancelled' || x.kind === 'gesture' || x.kind === 'timeout' ? 'dc-alert--info' : x.kind === 'nocred' ? 'dc-alert--warn' : 'dc-alert--danger', 'alert', (x.title ? x.title + '. ' : '') + x.text);
+      }
+    };
+    (async () => {
+      try {
+        if (!window.DCPasskey) return; const pk = mkPk(); if (!pk.supported()) return;
+        const st = await (await fetch('/api/passkeys/state', { credentials: 'same-origin' })).json(); if (!st.enabled || !st.keys || !keyBox.isConnected) return;
+        const kb = h('button', { class: 'dc-btn dc-btn--primary dc-btn--lg dc-btn--block', type: 'button', onclick: () => keyLogin(pk, kb) }, ico('fingerprint'), t('pk_btn'));
+        add(keyBox, kb, h('p', { class: 'dc-entrada__or' }, h('span', null, t('pk_or'))));
+        if (pk.hasMark()) { const d = document.getElementById('en-staff'); if (d) d.open = true; }
+      } catch (_) { /* sin llaves: queda la contraseña */ }
+    })();
     const lang = h('div', { class: 'en-lang' }, h('button', { type: 'button', class: 'dc-btn dc-btn--on-dark dc-btn--sm', 'aria-label': t('lang_to'), onclick: () => switchLang() }, LANG === 'es' ? 'Català' : 'Castellano'),
       h('button', { type: 'button', class: 'dc-btn dc-btn--on-dark dc-btn--sm dc-btn--icon', 'aria-label': t('theme_change').replace('{m}', t('theme_' + (window.HCTheme ? window.HCTheme.get() : 'auto'))), onclick: () => { window.HCTheme.next(); renderLogin(); } }, ico(THEME_ICON[window.HCTheme ? window.HCTheme.get() : 'auto'])));
     show(h('div', { class: 'dc-entrada' }, lang,
@@ -207,7 +250,7 @@
       h('div', { class: 'dc-entrada__card en-card' },
         h('h2', { class: 'dc-entrada__title', tabindex: '-1' }, t('login_title')), h('p', { class: 'dc-entrada__lead' }, t('en_campus_lead')),
         h('a', { class: 'dc-btn dc-btn--primary dc-btn--lg dc-btn--block', href: 'https://campus.luisfs.com' }, ico('graduation'), t('en_campus_btn')),
-        h('details', null, h('summary', null, ico('lock'), t('en_staff')), h('div', { class: 'dc-stack' }, h('p', { class: 'dc-muted dc-small' }, t('en_staff_help')), f))),
+        h('details', { id: 'en-staff' }, h('summary', null, ico('lock'), t('en_staff')), h('div', { class: 'dc-stack' }, keyBox, h('p', { class: 'dc-muted dc-small' }, t('en_staff_help')), f))),
       h('p', { class: 'dc-entrada__foot' }, t('en_note'))));
   }
 
@@ -601,6 +644,7 @@
       if (a === 'catalog') return await viewCatalog();
       if (a === 'taxonomy') return await window.HCX.viewTaxonomy();
       if (a === 'audit') return await viewAudit();
+      if (a === 'security') return await viewSecurity();
       if (a === 'grades') return await window.HCX.viewGrades();
       if (a === 'import') return await window.HCX.viewImport();
       return await viewPatients();

@@ -33,6 +33,7 @@ Todos los datos de pacientes deben ser **ficticios**.
 | `CAMPUS_URL` | Historia | `https://campus.luisfs.com` |
 | `CAMPUS_TOKEN` | Historia | Mismo valor que `HISTORIA_TOKEN` del Campus (para sincronizar alumnado). |
 | `ADMIN_PASSWORD` | Historia | Opcional: acceso de administración directo sin pasar por el Campus. |
+| `BASE_URL` | Historia | Opcional: dirección pública https de Historia clínica (por defecto `https://historia.luisfs.com`). De ella sale el dominio (rpID) de las llaves de acceso; si no es https o es localhost, las llaves se desactivan con un aviso en el registro y se sigue entrando con la contraseña. |
 | `HISTORIA_URL` | Campus | `https://historia.luisfs.com` (activa el botón en Mi espacio). |
 | `HISTORIA_SSO_SECRET` | Campus | El secreto de firma. |
 | `HISTORIA_TOKEN` | Campus | Token para `GET /api/historia/roster` y `POST /api/historia/grades`. |
@@ -56,6 +57,7 @@ npm start       # http://localhost:3000 (usa ADMIN_PASSWORD=... para entrar sin 
 - Cookie HttpOnly/SameSite, CSRF por cabecera + comprobación de origen, CSP estricta (sin scripts ni estilos inline), límite de intentos en login y SSO, tokens SSO de un solo uso.
 - El alumnado solo accede a las historias de las que es miembro; el resto responde 404. La ficha que recibe se filtra en el servidor (los campos de profesorado no viajan al navegador).
 - El profesorado no puede escribir registros como alumno.
+- **Huella y llaves de acceso (profesorado y administración).** Entrada adicional con huella, cara, PIN del dispositivo o llave física (WebAuthn, sin dependencias: `lib/webauthn.js` y `lib/passkeys.js`). Tabla propia `staff_passkeys` (migración segura: solo se crea si falta). El alumnado no las usa, la contraseña y el acceso por el Campus siguen valiendo siempre, y una llave nunca abre una cuenta de alumnado ni de profesorado dada de baja. Se gestionan en la cabecera, icono de huella (`#/security`), con el asistente «Añadir este dispositivo», que comprueba al momento que se puede entrar. Contrato v2 común con el resto de apps (`/api/passkeys/*`). `npm run e2e:llaves` lo recorre en Chrome real con autenticador virtual (no sustituye una prueba en un móvil real).
 - Las anulaciones no borran datos. Solo se eliminan historias vacías (sin registros).
 
 ## Funciones clínicas

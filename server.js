@@ -215,6 +215,8 @@ R('POST', '/api/teacher/login', async (req, res) => {
   limLogin.ok(ip); db.run('UPDATE users SET last_login = ? WHERE id = ?', new Date().toISOString(), u.id); audit(u.email, 'login-profesorado', '');
   json(res, 200, { ok: true }, { 'Set-Cookie': setCookie(req, newSession(u.id), TTL / 1000) });
 }, { open: true });
+/* huellas y llaves de acceso del profesorado y la administración (WebAuthn); el alumnado no las usa. La contraseña sigue siendo la salida. */
+require('./lib/passkeys')({ R, db, json, readJson, audit, newSession, setCookie, ipOf, limLogin, isStaff, SESSION_TTL: TTL, PUBLIC_URL: process.env.PUBLIC_URL || 'https://historia.luisfs.com' });
 R('POST', '/api/logout', async (req, res) => {
   const tok = cookies(req).hid; if (tok) db.run('DELETE FROM sessions WHERE hash = ?', U.sha(tok));
   json(res, 200, { ok: true }, { 'Set-Cookie': setCookie(req, '', 0) });
@@ -863,7 +865,7 @@ R('POST', '/api/teachers', async (req, res, ctx) => {
 R('DELETE', '/api/teachers/:id', async (req, res, ctx) => {
   if (ctx.user.role !== 'admin') return bad(res, 'forbidden', 403);
   const u = db.get("SELECT * FROM users WHERE id = ? AND role = 'teacher'", intId(ctx.params.id)); if (!u) return bad(res, 'notfound', 404);
-  db.run('UPDATE users SET active = 0, pw = NULL WHERE id = ?', u.id); db.run('DELETE FROM sessions WHERE user_id = ?', u.id);
+  db.run('UPDATE users SET active = 0, pw = NULL WHERE id = ?', u.id); db.run('DELETE FROM sessions WHERE user_id = ?', u.id); db.run('DELETE FROM staff_passkeys WHERE user_id = ?', u.id);
   audit(ctx.user.email, 'profesorado-baja', u.email); json(res, 200, { ok: true });
 }, { staff: true });
 

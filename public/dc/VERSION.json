@@ -12,6 +12,8 @@
     "fuentes/sourcesans3-latin.woff2": "19143dca075972bc",
     "fuentes/sourcesans3-latin-ext.woff2": "a85a7459bdb3cdc1",
     "iconos/iconos.js": "fec5fc24ad37b717",
-    "entrada/entrada.css": "42746375ccb5eae6"
+    "entrada/entrada.css": "42746375ccb5eae6",
+    "entrada/passkey.js": "c79f0fd0dab5e880",
+    "entrada/ajustes-llaves.js": "437b635848889085"
   }
 }

@@ -7,6 +7,7 @@
     "start": "node --disable-warning=ExperimentalWarning server.js",
     "test": "node --disable-warning=ExperimentalWarning --test test/",
     "e2e": "node tools/e2e-ui.mjs",
+    "e2e:llaves": "node tools/e2e-passkeys.mjs",
     "capturas": "node tools/capturas.mjs",
     "dc": "node tools/actualizar-diseno-comun.mjs"
   },

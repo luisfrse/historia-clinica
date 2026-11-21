@@ -15,7 +15,7 @@ const FILES = [
   'tokens.css', 'base.css', 'base.js',
   'fuentes/fuentes.css', 'fuentes/LICENCIAS.txt', 'fuentes/bricolage-latin.woff2', 'fuentes/bricolage-latin-ext.woff2', 'fuentes/sourcesans3-latin.woff2', 'fuentes/sourcesans3-latin-ext.woff2',
   'iconos/iconos.js',
-  'entrada/entrada.css',
+  'entrada/entrada.css', 'entrada/passkey.js', 'entrada/ajustes-llaves.js',
 ];
 if (!fs.existsSync(path.join(SRC, 'tokens.css'))) { console.error('No encuentro el diseño común en ' + SRC); process.exit(2); }
 let n = 0; const manifest = {};
